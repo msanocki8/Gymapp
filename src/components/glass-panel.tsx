@@ -10,6 +10,7 @@ type GlassPanelProps = PropsWithChildren<{
   tone?: 'neutral' | 'lime' | 'mint';
   delay?: number;
   radius?: number;
+  blurIntensity?: number;
   style?: StyleProp<ViewStyle>;
   contentClassName?: string;
   contentStyle?: StyleProp<ViewStyle>;
@@ -24,23 +25,23 @@ type GlassSurfaceStyle = ViewStyle & {
 
 const toneStyles = {
   neutral: {
-    backgroundColor: 'rgba(213, 230, 216, 0.04)',
-    borderColor: 'rgba(235, 242, 235, 0.13)',
-    borderTopColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(9, 13, 10, 0.46)',
+    borderColor: 'rgba(235, 242, 235, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     shadowColor: '#000000',
     boxShadow: '0 12px 40px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
   },
   lime: {
-    backgroundColor: 'rgba(177, 230, 97, 0.06)',
-    borderColor: 'rgba(235, 242, 235, 0.13)',
-    borderTopColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(13, 17, 10, 0.48)',
+    borderColor: 'rgba(235, 242, 235, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     shadowColor: '#000000',
     boxShadow: '0 12px 40px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
   },
   mint: {
-    backgroundColor: 'rgba(100, 199, 151, 0.045)',
-    borderColor: 'rgba(235, 242, 235, 0.13)',
-    borderTopColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(8, 15, 11, 0.48)',
+    borderColor: 'rgba(235, 242, 235, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     shadowColor: '#000000',
     boxShadow: '0 12px 40px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
   },
@@ -53,6 +54,7 @@ export function GlassPanel({
   tone = 'neutral',
   delay = 0,
   radius = 26,
+  blurIntensity = 22,
   style,
   contentStyle,
 }: GlassPanelProps) {
@@ -60,9 +62,9 @@ export function GlassPanel({
   const surfaceStyle = toneStyles[tone];
   const platformStyle: GlassSurfaceStyle = Platform.OS === 'web'
     ? {
-        backdropFilter: 'blur(24px) saturate(165%)',
-        WebkitBackdropFilter: 'blur(24px) saturate(165%)',
-        backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,0.06), transparent 52%)',
+        backdropFilter: 'blur(14px) saturate(150%)',
+        WebkitBackdropFilter: 'blur(14px) saturate(150%)',
+        backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,0.04), transparent 52%)',
         boxShadow: surfaceStyle.boxShadow,
       }
     : {
@@ -87,17 +89,19 @@ export function GlassPanel({
         platformStyle,
         style,
       ]}>
-      {Platform.OS !== 'web' && (
+      {Platform.OS !== 'web' && blurIntensity > 0 && (
         <BlurView
           blurTarget={blurTarget ?? undefined}
           blurMethod={Platform.OS === 'android' ? 'dimezisBlurViewSdk31Plus' : undefined}
-          intensity={40}
+          intensity={blurIntensity}
           tint="dark"
-          style={[StyleSheet.absoluteFill, { pointerEvents: 'none', borderRadius: radius, overflow: 'hidden' }]}
+          style={[StyleSheet.absoluteFill, { pointerEvents: 'none', zIndex: 0, borderRadius: radius, overflow: 'hidden' }]}
         />
       )}
-      <View style={{ pointerEvents: 'none' }} className="absolute left-6 right-6 top-0 h-px bg-white/15" />
-      <View className={`relative z-10 ${contentClassName ?? ''}`} style={contentStyle}>{children}</View>
+      <View style={{ pointerEvents: 'none', zIndex: 0 }} className="absolute left-6 right-6 top-0 h-px bg-white/15" />
+      <View className={`relative z-10 ${contentClassName ?? ''}`} style={[{ position: 'relative', zIndex: 1 }, contentStyle]}>
+        {children}
+      </View>
     </View>
   );
 

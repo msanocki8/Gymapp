@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
+import { BlurView } from 'expo-blur';
 import {
   Image,
   Pressable,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,7 +12,8 @@ import {
 
 import { Exercise } from '@/constants/exercise-library';
 import { workoutColors } from '@/components/workout-ui';
-import { MuscleEngagementMap } from '@/components/muscle-engagement-map';
+import { BodyView, getBodyView, MuscleEngagementMap } from '@/components/muscle-engagement-map';
+import { GlassBlurTargetContext } from '@/components/glass-blur-context';
 import { WorkoutSession } from '@/hooks/use-gym-app';
 
 type DetailTab = 'O ćwiczeniu' | 'Poziom' | 'Statystyki' | 'Historia';
@@ -26,13 +29,18 @@ export function ExerciseDetailModal({
   sessions?: WorkoutSession[];
   onClose: () => void;
 }) {
+  const blurTarget = useContext(GlassBlurTargetContext);
   const [tab, setTab] = useState<DetailTab>('O ćwiczeniu');
   const [showLoggingHelp, setShowLoggingHelp] = useState(false);
+  const [muscleViewState, setMuscleViewState] = useState<{ exerciseId: string; view: BodyView } | null>(null);
 
   if (!exercise) return null;
 
+  const muscleView = muscleViewState?.exerciseId === exercise.id
+    ? muscleViewState.view
+    : getBodyView(exercise);
   const primaryMuscles = exercise.primaryMuscles ?? [exercise.category];
-  const secondaryMuscles = exercise.secondaryMuscles ?? ['Stabilizatory', 'Mięśnie pomocnicze'];
+  const secondaryMuscles = exercise.secondaryMuscles ?? ['Stabilizatory i mięśnie pomocnicze'];
   const exerciseHistory = sessions.flatMap((session) => {
     const performance = session.exercisePerformance?.find((item) => item.name === exercise.name);
     return performance ? [{ session, performance }] : [];
@@ -104,18 +112,34 @@ export function ExerciseDetailModal({
                   </View>
                 )}
 
-                <View className="rounded-3xl border border-zinc-800 bg-zinc-900 p-4" style={styles.muscleCard}>
-                  <View className="flex-row items-center justify-between">
-                    <View>
-                      <Text style={styles.panelEyebrow}>MAPA ZAANGAŻOWANIA</Text>
-                      <Text style={styles.panelTitle}>Pracujące mięśnie</Text>
+                <View className="rounded-3xl border border-zinc-800 bg-zinc-900 p-4" style={[styles.muscleCard, styles.glassMuscleCard]}>
+                  {Platform.OS !== 'web' && blurTarget ? (
+                    <BlurView
+                      blurTarget={blurTarget}
+                      blurMethod={Platform.OS === 'android' ? 'dimezisBlurViewSdk31Plus' : undefined}
+                      intensity={35}
+                      tint="dark"
+                      pointerEvents="none"
+                      style={StyleSheet.absoluteFill}
+                    />
+                  ) : null}
+                  <View style={styles.muscleCardContent}>
+                    <View className="flex-row items-center justify-between">
+                      <View className="min-w-0 flex-1">
+                        <Text style={styles.panelEyebrow}>MAPA ZAANGAŻOWANIA</Text>
+                        <Text style={styles.panelTitle}>Pracujące mięśnie</Text>
+                      </View>
+                      <Text style={styles.muscleLegend}>PODGLĄD</Text>
                     </View>
-                    <Text style={styles.muscleLegend}>PODGLĄD</Text>
-                  </View>
-                  <MuscleEngagementMap exercise={exercise} />
-                  <View className="flex-row flex-wrap" style={styles.muscleLegendRow}>
-                    <MuscleLegend color="#B7FF35" title="Główne" muscles={primaryMuscles} />
-                    <MuscleLegend color="#45E8F2" title="Pomocnicze" muscles={secondaryMuscles} />
+                    <MuscleEngagementMap
+                      exercise={exercise}
+                      view={muscleView}
+                      onViewChange={(view) => setMuscleViewState({ exerciseId: exercise.id, view })}
+                    />
+                    <View className="flex-row flex-wrap" style={styles.muscleLegendRow}>
+                      <MuscleLegend color="#B7FF35" title="Główne" muscles={primaryMuscles} />
+                      <MuscleLegend color="#45E8F2" title="Pomocnicze" muscles={secondaryMuscles} />
+                    </View>
                   </View>
                 </View>
 
@@ -256,6 +280,8 @@ const styles = StyleSheet.create({
   loggingHelp: { marginTop: 8 },
   bodyText: { color: '#B4BDB3', fontSize: 12, lineHeight: 18 },
   muscleCard: { marginTop: 17 },
+  glassMuscleCard: { backgroundColor: 'rgba(24, 30, 25, 0.2)', borderColor: 'rgba(126, 150, 130, 0.24)', overflow: 'hidden', position: 'relative' },
+  muscleCardContent: { position: 'relative', zIndex: 1 },
   panelEyebrow: { color: '#8F9A8E', fontSize: 8, fontWeight: '800', letterSpacing: 1.1 },
   panelTitle: { color: workoutColors.text, fontSize: 15, fontWeight: '800', marginTop: 4 },
   muscleLegend: { color: '#879286', fontSize: 8, fontWeight: '800', letterSpacing: 0.8 },

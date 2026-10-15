@@ -379,13 +379,21 @@ function CreateWorkoutForm({ existingPlan }: { existingPlan?: WorkoutPlan }) {
               ))}
             </View>
           ) : (
-            <View className="items-center rounded-3xl border border-dashed border-zinc-700 bg-zinc-900/50 px-5 py-8" style={styles.emptyExercises}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Dodaj pierwsze ćwiczenie"
+              accessibilityHint="Otwiera bibliotekę ćwiczeń"
+              onPress={() => setPickerVisible(true)}
+              disabled={isSaving}
+              android_ripple={{ color: 'rgba(34, 197, 94, 0.12)' }}
+              className="items-center rounded-3xl border border-dashed border-zinc-700 bg-zinc-900/50 px-5 py-8 active:opacity-80"
+              style={styles.emptyExercises}>
               <View className="items-center justify-center rounded-2xl bg-lime-400/10" style={styles.emptyIcon}>
                 <Text style={styles.emptyIconText}>+</Text>
               </View>
               <Text style={styles.emptyTitle}>Zacznij od ćwiczeń</Text>
               <Text style={styles.emptyDescription}>Dodaj ruchy do rozpiski, a następnie ustaw liczbę serii, ciężar i powtórzenia.</Text>
-            </View>
+            </Pressable>
           )}
           <View style={styles.bottomSpace} />
         </ScrollView>

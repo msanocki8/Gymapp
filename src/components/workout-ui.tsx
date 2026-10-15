@@ -1,4 +1,6 @@
 import type { PropsWithChildren } from 'react';
+import { useRef } from 'react';
+import { BlurTargetView } from 'expo-blur';
 import {
   Pressable,
   StyleSheet,
@@ -7,6 +9,8 @@ import {
 } from 'react-native';
 import type { PressableProps, StyleProp, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { GlassBlurTargetContext } from '@/components/glass-blur-context';
 
 export const workoutColors = {
   background: '#080B09',
@@ -25,11 +29,17 @@ export function WorkoutScreen({
   children,
   maxWidth = 560,
 }: PropsWithChildren<{ maxWidth?: number }>) {
+  const blurTarget = useRef<View>(null);
+
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <View className="w-full min-w-0 flex-1 overflow-hidden" style={[styles.content, { maxWidth }]}>
-        {children}
-      </View>
+      <GlassBlurTargetContext.Provider value={blurTarget}>
+        <BlurTargetView ref={blurTarget} style={styles.blurTarget}>
+          <View className="w-full min-w-0 flex-1 overflow-hidden" style={[styles.content, { maxWidth }]}>
+            {children}
+          </View>
+        </BlurTargetView>
+      </GlassBlurTargetContext.Provider>
     </SafeAreaView>
   );
 }
@@ -164,6 +174,9 @@ export const workoutStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   screen: {
     backgroundColor: workoutColors.background,
+    flex: 1,
+  },
+  blurTarget: {
     flex: 1,
   },
   content: {

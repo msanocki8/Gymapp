@@ -1,5 +1,5 @@
 export const GymColors = {
-  background: '#070908',
+  background: '#050706',
   surface: '#111711',
   elevated: '#19221A',
   border: '#28352A',

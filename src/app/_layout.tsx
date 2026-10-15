@@ -65,7 +65,7 @@ function AppNavigator() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: '#070908' },
+        contentStyle: { backgroundColor: '#050706' },
       }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />

@@ -61,8 +61,8 @@ export const exerciseLibrary: Exercise[] = [
     image: 'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?auto=format&fit=crop&w=320&h=260&q=80',
     description: 'Ruch przyciągania budujący grubość pleców oraz siłę chwytu.',
     steps: ['Stań na szerokość bioder i pochyl tułów, utrzymując neutralne plecy.', 'Chwyć sztangę nachwytem i napnij brzuch.', 'Przyciągnij gryf do dolnych żeber, zatrzymaj na moment i opuść kontrolowanie.'],
-    primaryMuscles: ['Środek pleców'],
-    secondaryMuscles: ['Najszersze grzbietu', 'Tylny akton barków', 'Biceps'],
+    primaryMuscles: ['Najszersze grzbietu', 'Środek pleców'],
+    secondaryMuscles: ['Tylny akton barków', 'Biceps', 'Przedramiona'],
   },
   {
     id: 'barbell-squat',
@@ -85,8 +85,8 @@ export const exerciseLibrary: Exercise[] = [
     image: 'https://images.unsplash.com/photo-1603287681836-b174ce5074c2?auto=format&fit=crop&w=320&h=260&q=80',
     description: 'Ruch zawiasowy rozwijający tylną taśmę: pośladki i mięśnie dwugłowe uda.',
     steps: ['Stań prosto ze sztangą blisko ud, kolana lekko ugnij.', 'Cofaj biodra, przesuwając gryf wzdłuż nóg i utrzymując proste plecy.', 'Gdy poczujesz rozciąganie tyłu ud, wypchnij biodra w przód i wróć do stania.'],
-    primaryMuscles: ['Dwugłowe uda', 'Pośladki'],
-    secondaryMuscles: ['Prostowniki grzbietu', 'Przedramiona', 'Łydki'],
+    primaryMuscles: ['Dwugłowe uda', 'Pośladki', 'Prostowniki grzbietu'],
+    secondaryMuscles: ['Czworoboczne', 'Przedramiona'],
   },
   {
     id: 'lateral-raise',
@@ -125,6 +125,18 @@ export const exerciseLibrary: Exercise[] = [
     secondaryMuscles: ['Mięsień ramienny', 'Mięśnie przedramion'],
   },
   {
+    id: 'barbell-curl',
+    name: 'Uginanie przedramion ze sztangą',
+    category: 'Ramiona',
+    equipment: 'Sztanga',
+    level: 'Początkujący',
+    image: 'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?auto=format&fit=crop&w=720&h=440&q=85',
+    description: 'Uginanie ramion ze sztangą rozwijające biceps i mięśnie zginające przedramię.',
+    steps: ['Stań stabilnie, trzymaj gryf podchwytem na szerokość barków.', 'Ugnij łokcie, utrzymując je blisko tułowia i nie bujając ciałem.', 'Opuść gryf powoli do pozycji wyjściowej.'],
+    primaryMuscles: ['Biceps'],
+    secondaryMuscles: ['Mięsień ramienny', 'Mięśnie przedramion'],
+  },
+  {
     id: 'triceps-pushdown',
     name: 'Prostowanie na wyciągu',
     category: 'Ramiona',
@@ -145,8 +157,8 @@ export const exerciseLibrary: Exercise[] = [
     image: 'https://images.unsplash.com/photo-1603287681836-b174ce5074c2?auto=format&fit=crop&w=720&h=440&q=85',
     description: 'Wielostawowy ruch rozwijający siłę całego ciała, pośladków i tylnej taśmy.',
     steps: ['Ustaw stopy pod gryfem i chwyć go tuż za kolanami.', 'Napnij brzuch i plecy, wypchnij klatkę i biodra.', 'Wstań, prowadząc gryf blisko nóg, a następnie odłóż go kontrolowanie.'],
-    primaryMuscles: ['Pośladki', 'Prostowniki grzbietu'],
-    secondaryMuscles: ['Dwugłowe uda', 'Czworoboczne', 'Przedramiona'],
+    primaryMuscles: ['Pośladki', 'Dwugłowe uda', 'Prostowniki grzbietu'],
+    secondaryMuscles: ['Czworoboczne', 'Przedramiona'],
   },
   {
     id: 'pull-up',
@@ -206,7 +218,7 @@ export const exerciseLibrary: Exercise[] = [
     description: 'Ćwiczenie izolowane na przednią część uda.',
     steps: ['Usiądź stabilnie, ustaw wałek tuż nad kostkami.', 'Wyprostuj kolana, unosząc wałek bez zamachu.', 'Opuść ciężar powoli do pozycji początkowej.'],
     primaryMuscles: ['Czworogłowe uda'],
-    secondaryMuscles: ['Prostownik kolana'],
+    secondaryMuscles: ['Stabilizatory kolana'],
   },
   {
     id: 'leg-curl',
@@ -218,7 +230,7 @@ export const exerciseLibrary: Exercise[] = [
     description: 'Ruch zginania kolan wzmacniający tylną część ud.',
     steps: ['Ustaw wałek nad piętami i oprzyj biodra o ławkę.', 'Ugnij kolana, przyciągając pięty do pośladków.', 'Wróć powoli do wyprostu, nie tracąc napięcia.'],
     primaryMuscles: ['Dwugłowe uda'],
-    secondaryMuscles: ['Mięśnie łydek'],
+    secondaryMuscles: ['Mięśnie łydek', 'Pośladki'],
   },
   {
     id: 'dips',
@@ -235,7 +247,7 @@ export const exerciseLibrary: Exercise[] = [
   {
     id: 'crunch',
     name: 'Spięcia brzucha',
-    category: 'Ramiona',
+    category: 'Core',
     equipment: 'Masa ciała',
     level: 'Początkujący',
     image: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=720&h=440&q=85',
@@ -247,7 +259,7 @@ export const exerciseLibrary: Exercise[] = [
   {
     id: 'plank',
     name: 'Deska',
-    category: 'Ramiona',
+    category: 'Core',
     equipment: 'Masa ciała',
     level: 'Początkujący',
     image: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=720&h=440&q=85',
