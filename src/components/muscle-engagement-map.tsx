@@ -55,8 +55,8 @@ const colors: Record<MuscleRole, { start: string; end: string; glow: string }> =
 };
 
 const frontRegions: MuscleRegion[] = [
-  { group: 'frontDelts', path: 'M98 88 C87 85 76 91 73 102 C70 112 76 123 87 127 L105 116 L116 101 Z' },
   { group: 'lateralDelts', path: 'M87 92 C79 91 72 97 71 107 C71 115 77 121 85 124 L99 113 L106 101 Z' },
+  { group: 'frontDelts', path: 'M98 88 C87 85 76 91 73 102 C70 112 76 123 87 127 L105 116 L116 101 Z' },
   { group: 'chest', path: 'M137 104 C127 96 111 95 99 101 C91 105 89 115 92 126 C96 139 111 148 133 150 C137 140 139 127 137 104 Z' },
   { group: 'biceps', path: 'M76 130 C68 135 65 147 68 159 L76 183 C79 190 87 192 92 187 L89 159 C88 150 91 142 97 136 Z' },
   { group: 'forearms', path: 'M68 190 C63 197 63 207 66 217 L78 247 C81 254 89 255 94 250 L83 215 C81 207 82 198 87 191 Z' },
@@ -67,8 +67,8 @@ const frontRegions: MuscleRegion[] = [
 ];
 
 const backRegions: MuscleRegion[] = [
-  { group: 'rearDelts', path: 'M98 88 C87 85 76 91 73 102 C70 112 76 123 87 127 L105 116 L116 101 Z' },
   { group: 'lateralDelts', path: 'M87 92 C79 91 72 97 71 107 C71 115 77 121 85 124 L99 113 L106 101 Z' },
+  { group: 'rearDelts', path: 'M98 88 C87 85 76 91 73 102 C70 112 76 123 87 127 L105 116 L116 101 Z' },
   { group: 'traps', path: 'M140 82 C129 82 117 91 108 103 L124 123 L138 141 Z' },
   { group: 'triceps', path: 'M76 130 C68 135 65 147 68 159 L76 183 C79 190 87 192 92 187 L89 159 C88 150 91 142 97 136 Z' },
   { group: 'forearms', path: 'M68 190 C63 197 63 207 66 217 L78 247 C81 254 89 255 94 250 L83 215 C81 207 82 198 87 191 Z' },
