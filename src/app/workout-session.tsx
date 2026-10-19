@@ -1,14 +1,24 @@
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ExerciseDetailModal } from '@/components/exercise-detail-modal';
+import { MuscleVolumePanel } from '@/components/muscle-volume-panel';
 import { WorkoutCard, WorkoutHeader, WorkoutScreen, WorkoutButton, workoutColors, workoutStyles } from '@/components/workout-ui';
 import { exerciseLibrary, Exercise } from '@/constants/exercise-library';
-import { WorkoutExerciseConfig, useGymApp } from '@/hooks/use-gym-app';
+import { WorkoutExerciseConfig, WorkoutPlan, useGymApp } from '@/hooks/use-gym-app';
+import { AnalysisPeriod, calculateMuscleVolume, ExperienceLevel, getLocalWeekKey, VolumeExercise } from '@/lib/muscle-volume';
 
 const DEFAULT_SETS_PER_EXERCISE = 3;
 const DEFAULT_REST_SECONDS = 90;
+const EMPTY_PLAN: WorkoutPlan = {
+  id: '',
+  name: '',
+  focus: '',
+  duration: 0,
+  exercises: [],
+  source: 'created',
+};
 const exerciseAliases: Record<string, string> = {
   'Unoszenie bokiem': 'lateral-raise',
   'Prostowanie ramion': 'triceps-pushdown',
@@ -75,17 +85,25 @@ export default function WorkoutSessionScreen() {
   const [draftsByPlan, setDraftsByPlan] = useState<Record<string, SessionDraft>>({});
   const [expandedExerciseIndex, setExpandedExerciseIndex] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [analysisWeekKey, setAnalysisWeekKey] = useState('1970-01-01');
   const [restRemainingSeconds, setRestRemainingSeconds] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [restCardBottom, setRestCardBottom] = useState(Number.POSITIVE_INFINITY);
   const [selectedDetail, setSelectedDetail] = useState<Exercise | null>(null);
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null);
   const [keypadValue, setKeypadValue] = useState('');
+  const [analysisPeriod, setAnalysisPeriod] = useState<AnalysisPeriod>('session');
+  const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>('beginner');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const startedAt = useRef<number | null>(null);
   const allowExitRef = useRef(false);
   const savingRef = useRef(false);
+  const activePlan = plan ?? EMPTY_PLAN;
+  const initialDraft = useMemo(
+    () => createSessionDraft(activePlan),
+    [activePlan],
+  );
 
   useEffect(() => navigation.addListener('beforeRemove', (event) => {
     if (!plan || allowExitRef.current) return;
@@ -100,10 +118,14 @@ export default function WorkoutSessionScreen() {
 
   useEffect(() => {
     startedAt.current = Date.now();
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     const timer = setInterval(() => {
+      const now = Date.now();
       if (startedAt.current !== null) {
-        setElapsedSeconds(Math.floor((Date.now() - startedAt.current) / 1000));
+        setElapsedSeconds(Math.floor((now - startedAt.current) / 1000));
       }
+      const weekKey = getLocalWeekKey(now, timeZone);
+      setAnalysisWeekKey((current) => current === weekKey ? current : weekKey);
     }, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -114,6 +136,59 @@ export default function WorkoutSessionScreen() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const draft = draftsByPlan[activePlan.id] ?? initialDraft;
+  const { exerciseConfigs, setStatuses, notes } = draft;
+  const setCounts = exerciseConfigs.map((config) => config.sets.length);
+  const uniqueSetCounts = new Set(setCounts);
+  const setSummaryLabel = uniqueSetCounts.size === 1
+    ? `${setCounts[0] ?? DEFAULT_SETS_PER_EXERCISE} SERIE / ĆW.`
+    : 'SERIE WG PLANU';
+  const completedExercises = setStatuses.filter(
+    (statuses) => statuses.length > 0 && statuses.every((status) => status !== 'pending'),
+  ).length;
+  const progress = activePlan.exercises.length > 0
+    ? (completedExercises / activePlan.exercises.length) * 100
+    : 0;
+  const showMiniRestTimer = scrollOffset >= restCardBottom;
+
+  const volumeExercises = useMemo<VolumeExercise[]>(() => exerciseConfigs.map((config, exerciseIndex) => ({
+    exerciseId: config.exerciseId ?? exerciseLibrary.find((exercise) => exercise.name === config.name)?.id,
+    name: config.name,
+    sets: config.sets.map((set, setIndex) => ({
+      status: setStatuses[exerciseIndex]?.[setIndex] ?? 'pending',
+      reps: set.reps,
+    })),
+  })), [exerciseConfigs, setStatuses]);
+  const projectedExercises = useMemo<VolumeExercise[]>(() => volumeExercises.map((exercise) => ({
+    ...exercise,
+    sets: exercise.sets.map(() => ({ status: 'completed' as const })),
+  })), [volumeExercises]);
+  const historicalSessions = useMemo(() => sessions.map((session) => ({
+    completedAt: session.completedAt,
+    exercisePerformance: session.exercisePerformance?.map((exercise) => ({
+      exerciseId: exercise.exerciseId ?? exerciseLibrary.find((item) => item.name === exercise.name)?.id,
+      name: exercise.name,
+      sets: exercise.sets.map((set) => ({ ...set, completed: true })),
+    })),
+  })), [sessions]);
+  const localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const muscleVolumes = useMemo(() => calculateMuscleVolume({
+    exercises: volumeExercises,
+    sessions: historicalSessions,
+    period: analysisPeriod,
+    weekKey: analysisWeekKey,
+    timeZone: localTimeZone,
+    level: experienceLevel,
+  }), [volumeExercises, historicalSessions, analysisPeriod, analysisWeekKey, localTimeZone, experienceLevel]);
+  const projectedMuscleVolumes = useMemo(() => calculateMuscleVolume({
+    exercises: projectedExercises,
+    sessions: historicalSessions,
+    period: analysisPeriod,
+    weekKey: analysisWeekKey,
+    timeZone: localTimeZone,
+    level: experienceLevel,
+  }), [projectedExercises, historicalSessions, analysisPeriod, analysisWeekKey, localTimeZone, experienceLevel]);
 
   if (!plan) {
     return (
@@ -131,23 +206,6 @@ export default function WorkoutSessionScreen() {
       </WorkoutScreen>
     );
   }
-
-  const activePlan = plan;
-  const initialDraft = createSessionDraft(activePlan);
-  const draft = draftsByPlan[activePlan.id] ?? initialDraft;
-  const { exerciseConfigs, setStatuses, notes } = draft;
-  const setCounts = exerciseConfigs.map((config) => config.sets.length);
-  const uniqueSetCounts = new Set(setCounts);
-  const setSummaryLabel = uniqueSetCounts.size === 1
-    ? `${setCounts[0] ?? DEFAULT_SETS_PER_EXERCISE} SERIE / ĆW.`
-    : 'SERIE WG PLANU';
-  const completedExercises = setStatuses.filter(
-    (statuses) => statuses.length > 0 && statuses.every((status) => status !== 'pending'),
-  ).length;
-  const progress = activePlan.exercises.length > 0
-    ? (completedExercises / activePlan.exercises.length) * 100
-    : 0;
-  const showMiniRestTimer = scrollOffset >= restCardBottom;
 
   function updateDraft(updater: (current: SessionDraft) => SessionDraft) {
     setDraftsByPlan((current) => ({
@@ -377,6 +435,15 @@ export default function WorkoutSessionScreen() {
             </View>
           </WorkoutCard>
         </View>
+
+        <MuscleVolumePanel
+          volumes={muscleVolumes}
+          projectedVolumes={projectedMuscleVolumes}
+          period={analysisPeriod}
+          onPeriodChange={setAnalysisPeriod}
+          level={experienceLevel}
+          onLevelChange={setExperienceLevel}
+        />
 
         <View className="w-full min-w-0 flex-row items-center justify-between" style={styles.exerciseHeading}>
           <View className="min-w-0 flex-1 shrink">
