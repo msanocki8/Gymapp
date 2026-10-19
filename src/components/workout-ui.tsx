@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import { BlurTargetView } from 'expo-blur';
 import {
   Pressable,
+  Platform,
   StyleSheet,
   Text,
   View,
@@ -24,6 +25,15 @@ export const workoutColors = {
 };
 
 const APP_VERSION_LABEL = 'WERSJA 0.0.10';
+const buttonGlowStyle: ViewStyle & { boxShadow?: string } = Platform.OS === 'web'
+  ? { boxShadow: '0 4px 14px rgba(34, 197, 94, 0.2)' }
+  : {
+      shadowColor: '#22c55e',
+      shadowOpacity: 0.2,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 3,
+    };
 
 export function WorkoutScreen({
   children,
@@ -87,9 +97,10 @@ export function WorkoutButton({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      className={disabled ? 'bg-zinc-800' : 'bg-neon active:opacity-85 shadow-lg shadow-neon/20'}
+      className={disabled ? 'bg-zinc-800' : 'bg-neon active:opacity-85'}
       style={[
         styles.actionButton,
+        !disabled && buttonGlowStyle,
         disabled && styles.disabledButton,
       ]}>
       <Text
@@ -175,6 +186,7 @@ const styles = StyleSheet.create({
   screen: {
     backgroundColor: workoutColors.background,
     flex: 1,
+    overflow: 'hidden',
   },
   blurTarget: {
     flex: 1,

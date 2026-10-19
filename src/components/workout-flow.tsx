@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useState } from 'react';
 
 import { WorkoutPlan, useGymApp } from '@/hooks/use-gym-app';
 import {
@@ -10,7 +11,19 @@ import {
   workoutStyles,
 } from '@/components/workout-ui';
 
-function PlanCard({ plan, index, wide }: { plan: WorkoutPlan; index: number; wide: boolean }) {
+function PlanCard({
+  plan,
+  index,
+  wide,
+  onDelete,
+  deleting,
+}: {
+  plan: WorkoutPlan;
+  index: number;
+  wide: boolean;
+  onDelete: (plan: WorkoutPlan) => void;
+  deleting: boolean;
+}) {
   const router = useRouter();
   const exerciseCountForm = plan.exercises.length === 1
     ? 'ćwiczenie'
@@ -60,6 +73,20 @@ function PlanCard({ plan, index, wide }: { plan: WorkoutPlan; index: number; wid
           style={styles.editPlanButton}>
           <Text style={styles.editPlanText}>EDYTUJ</Text>
         </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Usuń plan ${plan.name}`}
+          accessibilityState={{ disabled: deleting }}
+          disabled={deleting}
+          onPress={() => onDelete(plan)}
+          className="shrink-0 rounded-xl border border-red-400/30 bg-red-950/30 active:opacity-70"
+          style={styles.deletePlanButton}>
+          {deleting ? (
+            <ActivityIndicator color="#FCA5A5" size="small" />
+          ) : (
+            <Text style={styles.deletePlanText}>USUŃ</Text>
+          )}
+        </Pressable>
       </View>
     </WorkoutCard>
   );
@@ -67,7 +94,9 @@ function PlanCard({ plan, index, wide }: { plan: WorkoutPlan; index: number; wid
 
 export function WorkoutFlow() {
   const router = useRouter();
-  const { plans, plansLoading, plansError, reloadPlans } = useGymApp();
+  const { plans, plansLoading, plansError, reloadPlans, deletePlan } = useGymApp();
+  const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const { width } = useWindowDimensions();
   const isWideScreen = width >= 760;
   const lastTwoDigits = plans.length % 100;
@@ -77,6 +106,27 @@ export function WorkoutFlow() {
     : lastDigit >= 2 && lastDigit <= 4 && (lastTwoDigits < 12 || lastTwoDigits > 14)
       ? 'PLANY'
       : 'PLANÓW';
+  const confirmDeletePlan = (plan: WorkoutPlan) => {
+    const message = `Czy na pewno chcesz usunąć plan „${plan.name}”?`;
+    const onConfirm = () => {
+      setDeletingPlanId(plan.id);
+      setDeleteError(null);
+      void deletePlan(plan.id)
+        .catch((error: unknown) => {
+          setDeleteError(error instanceof Error ? error.message : 'Nie udało się usunąć planu.');
+        })
+        .finally(() => setDeletingPlanId(null));
+    };
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(message)) onConfirm();
+      return;
+    }
+
+    Alert.alert('Usunąć plan?', message, [
+      { text: 'Anuluj', style: 'cancel' },
+      { text: 'Usuń', style: 'destructive', onPress: onConfirm },
+    ]);
+  };
 
   return (
     <WorkoutScreen maxWidth={820}>
@@ -157,10 +207,21 @@ export function WorkoutFlow() {
           </View>
         ) : null}
 
+        {deleteError ? (
+          <Text accessibilityRole="alert" className="mb-4 text-xs leading-5 text-red-200">{deleteError}</Text>
+        ) : null}
+
         {plans.length > 0 ? (
           <View className="w-full min-w-0 items-center" style={[styles.planList, isWideScreen && styles.planListWide]}>
             {plans.map((plan, index) => (
-              <PlanCard key={plan.id} plan={plan} index={index} wide={isWideScreen} />
+              <PlanCard
+                key={plan.id}
+                plan={plan}
+                index={index}
+                wide={isWideScreen}
+                onDelete={confirmDeletePlan}
+                deleting={deletingPlanId === plan.id}
+              />
             ))}
           </View>
         ) : (
@@ -415,6 +476,19 @@ const styles = StyleSheet.create({
   },
   editPlanText: {
     color: '#AAB4A8',
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  deletePlanButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 31,
+    minWidth: 48,
+    paddingHorizontal: 9,
+  },
+  deletePlanText: {
+    color: '#FCA5A5',
     fontSize: 8,
     fontWeight: '800',
     letterSpacing: 0.6,

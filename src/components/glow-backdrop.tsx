@@ -1,4 +1,4 @@
-import { Platform, View, ViewStyle } from 'react-native';
+import { Platform, StyleSheet, View, ViewStyle } from 'react-native';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import Animated, {
   Easing,
@@ -11,7 +11,7 @@ import Animated, {
 import { useEffect } from 'react';
 
 type GlowOrbStyle = ViewStyle & {
-  filter?: string;
+  backgroundImage?: string;
 };
 
 function GlowHalo({ id, color, opacity }: { id: string; color: string; opacity: number }) {
@@ -67,8 +67,54 @@ export function GlowBackdrop() {
     transform: [{ scale: 0.94 + mintGlow.value * 0.1 }],
   }));
 
+  if (Platform.OS === 'web') {
+    return (
+      <View style={[StyleSheet.absoluteFill, styles.webBackdrop]}>
+        <Animated.View
+          style={[
+            limeStyle,
+            styles.webGlow,
+            {
+              top: -130,
+              right: -150,
+              width: 470,
+              height: 470,
+              backgroundColor: 'rgba(34, 197, 94, 0.3)',
+            },
+          ]}
+        />
+        <Animated.View
+          style={[
+            mintStyle,
+            styles.webGlow,
+            {
+              bottom: -280,
+              left: -180,
+              width: 520,
+              height: 520,
+              backgroundColor: 'rgba(83, 230, 165, 0.28)',
+            },
+          ]}
+        />
+        <Animated.View
+          style={[
+            mintStyle,
+            styles.webGlow,
+            {
+              top: '42%',
+              left: '58%',
+              width: 210,
+              height: 210,
+              backgroundColor: 'rgba(181, 240, 102, 0.26)',
+            },
+          ]}
+        />
+      </View>
+    );
+  }
+
   return (
-    <View style={[{ pointerEvents: 'none' }]} className="absolute inset-0 overflow-hidden">
+    <View style={styles.nativeBackdrop} className="absolute inset-0 overflow-hidden">
       <Animated.View
         style={[
           limeStyle,
@@ -85,7 +131,6 @@ export function GlowBackdrop() {
             shadowRadius: 52,
             shadowOffset: { width: 0, height: 0 },
             elevation: 18,
-            ...(Platform.OS === 'web' ? { filter: 'blur(84px)' } : {}),
           } as GlowOrbStyle,
         ]}>
         <GlowHalo id="lime-orb-halo" color="#22c55e" opacity={0.32} />
@@ -106,7 +151,6 @@ export function GlowBackdrop() {
             shadowRadius: 48,
             shadowOffset: { width: 0, height: 0 },
             elevation: 16,
-            ...(Platform.OS === 'web' ? { filter: 'blur(90px)' } : {}),
           } as GlowOrbStyle,
         ]}>
         <GlowHalo id="mint-orb-halo" color="#53e6a5" opacity={0.28} />
@@ -127,7 +171,6 @@ export function GlowBackdrop() {
             shadowRadius: 50,
             shadowOffset: { width: 0, height: 0 },
             elevation: 15,
-            ...(Platform.OS === 'web' ? { filter: 'blur(90px)' } : {}),
           } as GlowOrbStyle,
         ]}>
         <GlowHalo id="lime-orb-lower-halo" color="#b5f066" opacity={0.26} />
@@ -135,3 +178,9 @@ export function GlowBackdrop() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  nativeBackdrop: { pointerEvents: 'none' },
+  webBackdrop: { pointerEvents: 'none', overflow: 'hidden' },
+  webGlow: { position: 'absolute', borderRadius: 999 },
+});

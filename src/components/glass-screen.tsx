@@ -20,7 +20,7 @@ export function GlassScreen({ children, className = '', edges, style }: GlassScr
       <SafeAreaView
         className={`relative flex-1 bg-ink-950 ${className}`}
         edges={edges}
-        style={style}>
+        style={[styles.screen, style]}>
         <BlurTargetView
           ref={blurTarget}
           style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
@@ -32,3 +32,7 @@ export function GlassScreen({ children, className = '', edges, style }: GlassScr
     </GlassBlurTargetContext.Provider>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { overflow: 'hidden' },
+});

@@ -48,7 +48,7 @@ function formatElapsed(seconds: number) {
 function confirmWorkoutExit(onConfirm: () => void) {
   const message = 'Czy na pewno chcesz wyjść i usunąć progres treningu?';
   if (Platform.OS === 'web') {
-    if (window.confirm(message)) onConfirm();
+    if (typeof window !== 'undefined' && window.confirm(message)) onConfirm();
     return;
   }
 
@@ -327,8 +327,11 @@ export default function WorkoutSessionScreen() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Nie udało się zapisać treningu.';
       setSaveError(message);
-      if (Platform.OS === 'web') window.alert(message);
-      else Alert.alert('Błąd zapisu', message);
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') window.alert(message);
+      } else {
+        Alert.alert('Błąd zapisu', message);
+      }
     } finally {
       savingRef.current = false;
       setIsSaving(false);

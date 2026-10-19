@@ -1,7 +1,7 @@
 import { SymbolView } from 'expo-symbols';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { GlassPanel } from '@/components/glass-panel';
 import { GlassScreen } from '@/components/glass-screen';
@@ -201,8 +201,10 @@ function SessionDetails({ session, onBack }: { session: WorkoutSession; onBack: 
 
 export default function HistoryScreen() {
   const router = useRouter();
-  const { sessions, sessionsLoading, sessionsError, reloadSessions } = useGymApp();
+  const { sessions, sessionsLoading, sessionsError, reloadSessions, deleteSession } = useGymApp();
   const [selectedSession, setSelectedSession] = useState<WorkoutSession | null>(null);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const today = new Date();
   const activity = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(today);
@@ -225,6 +227,31 @@ export default function HistoryScreen() {
     return 'treningów';
   };
   const savedWord = sessions.length === 1 ? 'zapisany' : sessions.length >= 2 && sessions.length <= 4 ? 'zapisane' : 'zapisanych';
+
+  const removeSession = async (session: WorkoutSession) => {
+    setDeletingSessionId(session.id);
+    setDeleteError(null);
+    try {
+      await deleteSession(session.id);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Nie udało się usunąć treningu.');
+    } finally {
+      setDeletingSessionId(null);
+    }
+  };
+  const confirmRemoveSession = (session: WorkoutSession) => {
+    const message = `Czy na pewno chcesz usunąć trening „${session.name}”?`;
+    const onConfirm = () => { void removeSession(session); };
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(message)) onConfirm();
+      return;
+    }
+
+    Alert.alert('Usunąć trening?', message, [
+      { text: 'Anuluj', style: 'cancel' },
+      { text: 'Usuń', style: 'destructive', onPress: onConfirm },
+    ]);
+  };
 
   if (selectedSession) {
     return <SessionDetails session={selectedSession} onBack={() => setSelectedSession(null)} />;
@@ -294,6 +321,9 @@ export default function HistoryScreen() {
             <Text className="text-[20px] font-extrabold text-white">Ostatnie treningi</Text>
             <Text className="text-xs font-semibold text-white/40">{sessions.length} {savedWord}</Text>
           </View>
+          {deleteError ? (
+            <Text accessibilityRole="alert" className="mb-3 text-sm leading-5 text-red-200">{deleteError}</Text>
+          ) : null}
           {sessionsLoading ? (
             <GlassPanel className="rounded-[22px] p-5">
               <View className="flex-row items-center gap-3">
@@ -314,12 +344,12 @@ export default function HistoryScreen() {
           ) : sessions.length > 0 ? (
             <View className="gap-3">
               {sessions.map((session, index) => (
-                <GlassPanel key={session.id} tone={index % 2 === 1 ? 'mint' : 'neutral'} delay={220 + index * 70} className="rounded-[22px]" contentClassName="">
+                <GlassPanel key={session.id} tone={index % 2 === 1 ? 'mint' : 'neutral'} delay={220 + index * 70} className="rounded-[22px]" contentClassName="flex-row items-start">
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Zobacz szczegóły treningu ${session.name} z ${session.date}`}
                     onPress={() => setSelectedSession(session)}
-                    className="flex-row items-start gap-3 p-4 active:bg-white/[0.04]">
+                    className="min-w-0 flex-1 flex-row items-start gap-3 p-4 active:bg-white/[0.04]">
                     <View className={`h-12 w-12 items-center justify-center rounded-2xl ${index % 2 === 1 ? 'bg-mint/10' : 'bg-neon/10'}`}>
                       <SymbolView name={{ ios: 'dumbbell.fill', android: 'fitness_center', web: 'fitness_center' }} size={20} tintColor={index % 2 === 1 ? '#83F3C0' : '#22C55E'} />
                     </View>
@@ -343,6 +373,19 @@ export default function HistoryScreen() {
                       </Text>
                       <Text className="mt-1 text-[10px] font-bold text-white/40">SZCZEGÓŁY ›</Text>
                     </View>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Usuń trening ${session.name} z ${session.date}`}
+                    accessibilityState={{ disabled: deletingSessionId === session.id }}
+                    disabled={deletingSessionId === session.id}
+                    onPress={() => confirmRemoveSession(session)}
+                    className="mr-2 mt-3 h-11 w-11 items-center justify-center rounded-xl active:bg-red-500/15">
+                    {deletingSessionId === session.id ? (
+                      <ActivityIndicator color="#FCA5A5" />
+                    ) : (
+                      <SymbolView name={{ ios: 'trash', android: 'delete', web: 'delete' }} size={18} tintColor="#FCA5A5" />
+                    )}
                   </Pressable>
                 </GlassPanel>
               ))}

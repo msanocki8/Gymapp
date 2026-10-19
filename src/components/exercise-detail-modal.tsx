@@ -77,7 +77,11 @@ export function ExerciseDetailModal({
               <>
                 <View className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900" style={styles.demoCard}>
                   {exercise.image ? (
-                    <Image source={{ uri: exercise.image }} resizeMode="cover" style={styles.demoImage} />
+                    <Image
+                      source={typeof exercise.image === 'string' ? { uri: exercise.image } : exercise.image}
+                      resizeMode="cover"
+                      style={styles.demoImage}
+                    />
                   ) : (
                     <View className="flex-1 items-center justify-center bg-zinc-900">
                       <Text style={styles.customExerciseGlyph}>{exercise.name.slice(0, 1).toLocaleUpperCase('pl-PL')}</Text>

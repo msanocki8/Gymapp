@@ -16,25 +16,41 @@ import { GlassScreen } from '@/components/glass-screen';
 import { useGymApp } from '@/hooks/use-gym-app';
 import type { WorkoutPlan } from '@/hooks/use-gym-app';
 
-const glassStyle: ViewStyle = {
+type CrossPlatformShadowStyle = ViewStyle & { boxShadow?: string };
+
+const glassStyle: CrossPlatformShadowStyle = {
   backgroundColor: 'rgba(8, 13, 10, 0.62)',
   borderColor: 'rgba(210, 231, 217, 0.14)',
   borderTopColor: 'rgba(240, 255, 244, 0.2)',
-  shadowColor: '#72dba0',
-  shadowOpacity: 0.12,
-  shadowRadius: 16,
-  shadowOffset: { width: 0, height: 5 },
-  elevation: 4,
+  ...(Platform.OS === 'web'
+    ? { boxShadow: '0 8px 22px rgba(0, 0, 0, 0.26)' }
+    : {
+        shadowColor: '#72dba0',
+        shadowOpacity: 0.12,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 5 },
+        elevation: 4,
+      }),
 };
 
-const startButtonGlowStyle: ViewStyle & { boxShadow?: string } = {
-  shadowColor: '#22c55e',
-  shadowOpacity: 0.62,
-  shadowRadius: 22,
-  shadowOffset: { width: 0, height: 0 },
-  elevation: 9,
-  ...(Platform.OS === 'web' ? { boxShadow: '0 0 22px rgba(34, 197, 94, 0.72), 0 0 48px rgba(34, 197, 94, 0.32)' } : {}),
-};
+const startButtonGlowStyle: CrossPlatformShadowStyle = Platform.OS === 'web'
+  ? { boxShadow: '0 5px 16px rgba(34, 197, 94, 0.28)' }
+  : {
+      shadowColor: '#22c55e',
+      shadowOpacity: 0.62,
+      shadowRadius: 22,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 9,
+    };
+
+const progressSegmentGlowStyle: CrossPlatformShadowStyle = Platform.OS === 'web'
+  ? { boxShadow: '0 0 8px rgba(74, 222, 128, 0.3)' }
+  : {
+      shadowColor: '#4ade80',
+      shadowOpacity: 0.35,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 0 },
+    };
 
 const formatDuration = (minutes: number) => `${minutes} min`;
 
@@ -192,7 +208,7 @@ export default function TrainingHomeScreen() {
                   <Text style={styles.eyebrow}>TWÓJ TYDZIEŃ</Text>
                 </View>
                 <Text style={styles.weekCount}>
-                  {sessionsLoading ? '…' : completedWorkouts}<Text style={styles.weekTotal}> / 3 treningi</Text>
+                  {sessionsLoading ? '…' : completedWorkouts}<Text style={styles.weekTotal}> z 3 treningów</Text>
                 </Text>
               </View>
               <View style={styles.progressTrack} accessibilityLabel={`${completedWorkouts} z 3 treningów`}>
@@ -202,6 +218,7 @@ export default function TrainingHomeScreen() {
                     style={[
                       styles.progressSegment,
                       segment < completedWorkouts && styles.progressSegmentActive,
+                      segment < completedWorkouts && progressSegmentGlowStyle,
                     ]}
                   />
                 ))}
@@ -441,10 +458,6 @@ const styles = StyleSheet.create({
   },
   progressSegmentActive: {
     backgroundColor: '#22c55e',
-    shadowColor: '#4ade80',
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 0 },
   },
   weekHint: {
     color: '#fca5a5',
@@ -456,11 +469,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(8, 13, 10, 0.54)',
     borderColor: 'rgba(218, 232, 221, 0.1)',
     borderTopColor: 'rgba(245, 255, 247, 0.16)',
-    shadowColor: '#000000',
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
   },
   featureContent: {
     padding: 21,

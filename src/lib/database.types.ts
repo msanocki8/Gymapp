@@ -89,6 +89,12 @@ export type Database = {
         };
         Relationships: [];
       };
+      user_hidden_starter_plans: {
+        Row: { user_id: string; starter_plan_id: string; created_at: string };
+        Insert: { user_id: string; starter_plan_id: string; created_at?: string };
+        Update: Record<string, never>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

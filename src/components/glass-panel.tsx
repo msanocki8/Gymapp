@@ -17,8 +17,6 @@ type GlassPanelProps = PropsWithChildren<{
 }>;
 
 type GlassSurfaceStyle = ViewStyle & {
-  backdropFilter?: string;
-  WebkitBackdropFilter?: string;
   backgroundImage?: string;
   boxShadow?: string;
 };
@@ -26,24 +24,27 @@ type GlassSurfaceStyle = ViewStyle & {
 const toneStyles = {
   neutral: {
     backgroundColor: 'rgba(9, 13, 10, 0.46)',
+    webBackgroundColor: 'rgba(13, 18, 14, 0.96)',
     borderColor: 'rgba(235, 242, 235, 0.11)',
     borderTopColor: 'rgba(255, 255, 255, 0.15)',
     shadowColor: '#000000',
-    boxShadow: '0 12px 40px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
+    boxShadow: '0 8px 22px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.07)',
   },
   lime: {
     backgroundColor: 'rgba(13, 17, 10, 0.48)',
+    webBackgroundColor: 'rgba(16, 20, 13, 0.96)',
     borderColor: 'rgba(235, 242, 235, 0.11)',
     borderTopColor: 'rgba(255, 255, 255, 0.15)',
     shadowColor: '#000000',
-    boxShadow: '0 12px 40px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
+    boxShadow: '0 8px 22px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.07)',
   },
   mint: {
     backgroundColor: 'rgba(8, 15, 11, 0.48)',
+    webBackgroundColor: 'rgba(13, 19, 15, 0.96)',
     borderColor: 'rgba(235, 242, 235, 0.11)',
     borderTopColor: 'rgba(255, 255, 255, 0.15)',
     shadowColor: '#000000',
-    boxShadow: '0 12px 40px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
+    boxShadow: '0 8px 22px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.07)',
   },
 } as const;
 
@@ -62,9 +63,8 @@ export function GlassPanel({
   const surfaceStyle = toneStyles[tone];
   const platformStyle: GlassSurfaceStyle = Platform.OS === 'web'
     ? {
-        backdropFilter: 'blur(14px) saturate(150%)',
-        WebkitBackdropFilter: 'blur(14px) saturate(150%)',
-        backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,0.04), transparent 52%)',
+        backgroundColor: surfaceStyle.webBackgroundColor,
+        backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,0.035), transparent 52%)',
         boxShadow: surfaceStyle.boxShadow,
       }
     : {

@@ -51,7 +51,13 @@ function ExerciseDetails({ exercise, onClose }: { exercise: Exercise; onClose: (
 
           <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
             <View style={styles.heroImageWrap}>
-              <Image source={{ uri: exercise.image }} contentFit="cover" transition={180} accessibilityLabel={`Zdjęcie: ${exercise.name}`} style={styles.heroImage} />
+              <Image
+                source={typeof exercise.image === 'string' ? { uri: exercise.image } : exercise.image}
+                contentFit="cover"
+                transition={180}
+                accessibilityLabel={`Ilustracja: ${exercise.name}`}
+                style={styles.heroImage}
+              />
               <View style={styles.imageScrim} />
               <View style={styles.equipmentPill}><Text style={styles.equipmentText}>{exercise.equipment}</Text></View>
             </View>
