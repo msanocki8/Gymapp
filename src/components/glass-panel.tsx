@@ -4,6 +4,7 @@ import { PropsWithChildren, useContext } from 'react';
 import { Platform, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 
 import { GlassBlurTargetContext } from '@/components/glass-blur-context';
+import '@/lib/nativewind-interop';
 
 type GlassPanelProps = PropsWithChildren<{
   className: string;

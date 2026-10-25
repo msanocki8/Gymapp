@@ -12,6 +12,7 @@ import type { PressableProps, StyleProp, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { GlassBlurTargetContext } from '@/components/glass-blur-context';
+import '@/lib/nativewind-interop';
 
 export const workoutColors = {
   background: '#080B09',
