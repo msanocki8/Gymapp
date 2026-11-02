@@ -1,5 +1,3 @@
-import type { ImageSourcePropType } from 'react-native';
-
 export type ExerciseCategory = 'Klatka' | 'Plecy' | 'Nogi' | 'Barki' | 'Ramiona' | 'Core';
 
 export type Exercise = {
@@ -8,7 +6,7 @@ export type Exercise = {
   category: ExerciseCategory;
   equipment: string;
   level: string;
-  image: string | ImageSourcePropType;
+  image: string | number;
   description: string;
   steps: string[];
   primaryMuscles?: string[];
@@ -20,7 +18,7 @@ export const exerciseCategories: ExerciseCategory[] = ['Klatka', 'Plecy', 'Nogi'
 export const exerciseLibrary: Exercise[] = [
   {
     id: 'bench-press',
-    name: 'Wyciskanie sztangi',
+    name: 'Wyciskanie sztangi na ławce płaskiej',
     category: 'Klatka',
     equipment: 'Sztanga · ławka',
     level: 'Średni',
@@ -65,6 +63,30 @@ export const exerciseLibrary: Exercise[] = [
     steps: ['Stań na szerokość bioder i pochyl tułów, utrzymując neutralne plecy.', 'Chwyć sztangę nachwytem i napnij brzuch.', 'Przyciągnij gryf do dolnych żeber, zatrzymaj na moment i opuść kontrolowanie.'],
     primaryMuscles: ['Najszersze grzbietu', 'Środek pleców'],
     secondaryMuscles: ['Tylny akton barków', 'Biceps', 'Przedramiona'],
+  },
+  {
+    id: 'chest-supported-row',
+    name: 'Wiosłowanie z podparciem klatki',
+    category: 'Plecy',
+    equipment: 'Maszyna lub ławka skośna · hantle',
+    level: 'Początkujący',
+    image: require('../../assets/exercise-images/seated-cable-row.png'),
+    description: 'Wiosłowanie z podpartą klatką ogranicza pracę tułowia i pozwala skupić się na mięśniach pleców.',
+    steps: ['Oprzyj klatkę o podparcie i ustaw stopy stabilnie.', 'Przyciągnij uchwyty w stronę tułowia, prowadząc łokcie za siebie.', 'Opuść ciężar powoli, nie tracąc kontaktu klatki z podparciem.'],
+    primaryMuscles: ['Najszersze grzbietu', 'Środek pleców'],
+    secondaryMuscles: ['Tylny akton barków', 'Biceps'],
+  },
+  {
+    id: 'pec-deck-fly',
+    name: 'Rozpiętki na maszynie pec deck',
+    category: 'Klatka',
+    equipment: 'Maszyna pec deck',
+    level: 'Początkujący',
+    image: require('../../assets/exercise-images/flat-dumbbell-press.png'),
+    description: 'Izolowane przywodzenie ramion na maszynie pec deck angażuje klatkę piersiową przy stabilnym tułowiu.',
+    steps: ['Usiądź z plecami opartymi o oparcie i ustaw uchwyty na wysokości klatki.', 'Złącz ramiona przed sobą, lekko uginając łokcie.', 'Wróć powoli do wygodnego rozciągnięcia klatki bez odrywania pleców od oparcia.'],
+    primaryMuscles: ['Klatka piersiowa'],
+    secondaryMuscles: ['Przedni akton barków'],
   },
   {
     id: 'barbell-squat',

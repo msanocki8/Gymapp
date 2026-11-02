@@ -52,13 +52,13 @@ function createStarterPlan(
   name: string,
   focus: string,
   duration: number,
-  items: [exerciseId: string, setCount: number, reps: string][],
+  items: [exerciseId: string, setCount: number, reps: string, displayName?: string][],
 ): WorkoutPlan {
-  const exerciseConfigs = items.map(([exerciseId, setCount, reps]) => {
+  const exerciseConfigs = items.map(([exerciseId, setCount, reps, displayName]) => {
     const exercise = exerciseLibrary.find((item) => item.id === exerciseId);
     if (!exercise) throw new Error(`Brak ćwiczenia ${exerciseId} wymaganego przez plan ${name}.`);
     return {
-      name: exercise.name,
+      name: displayName ?? exercise.name,
       exerciseId,
       sets: Array.from({ length: setCount }, () => ({ weight: '', reps })),
     };
@@ -114,6 +114,43 @@ const starterPlans: WorkoutPlan[] = [
   ]),
 ];
 
+const sanoPlanSeedMarker = 'sano-workout-plans-v1';
+const sanoPlans: WorkoutPlan[] = [
+  createStarterPlan('sano-push-a', 'Dzień 1 — PUSH A', 'PUSH · klatka · barki · triceps', 60, [
+    ['bench-press', 4, '4–6'],
+    ['incline-dumbbell-press', 3, '8–12'],
+    ['cable-lateral-raise', 3, '12–20'],
+    ['triceps-pushdown', 3, '10–15'],
+    ['cable-overhead-triceps-extension', 2, '10–15'],
+    ['cable-crunch', 3, '10–15'],
+  ]),
+  createStarterPlan('sano-pull-a', 'Dzień 2 — PULL A', 'PULL · plecy · biceps', 65, [
+    ['lat-pulldown', 3, '8–12', 'Ściąganie drążka wyciągu górnego do klatki'],
+    ['seated-cable-row', 3, '8–12'],
+    ['chest-supported-row', 2, '8–12'],
+    ['reverse-pec-deck', 3, '12–20'],
+    ['incline-dumbbell-curl', 3, '8–12'],
+    ['cable-hammer-curl', 2, '10–15'],
+    ['hanging-leg-raise', 3, '10–15'],
+  ]),
+  createStarterPlan('sano-push-b', 'Dzień 4 — PUSH B', 'PUSH · objętość · góra klatki', 60, [
+    ['incline-smith-press', 3, '8–12'],
+    ['bench-press', 3, '6–8'],
+    ['pec-deck-fly', 2, '12–15'],
+    ['cable-lateral-raise', 4, '12–20'],
+    ['triceps-pushdown', 3, '10–15'],
+    ['cable-crunch', 3, '10–15'],
+  ]),
+  createStarterPlan('sano-pull-b', 'Dzień 5 — PULL B', 'PULL · plecy · biceps', 60, [
+    ['lat-pulldown', 3, '8–12', 'Ściąganie drążka do klatki — wygodny chwyt'],
+    ['seated-cable-row', 3, '10–12'],
+    ['reverse-pec-deck', 4, '12–20'],
+    ['preacher-curl', 3, '10–15'],
+    ['cable-hammer-curl', 2, '10–15'],
+    ['cable-crunch', 3, '10–15'],
+  ]),
+];
+
 type PlanRow = {
   id: string;
   source_plan_id: string | null;
@@ -150,6 +187,86 @@ type GymAppContextValue = {
 
 const GymAppContext = createContext<GymAppContextValue | null>(null);
 const sessionSelect = 'id, name, focus, duration, completed_exercises, total_exercises, completed_at, notes, exercise_performance';
+
+async function seedSanoPlans(userId: string) {
+  const client = requireSupabase();
+  const { data: hiddenRows, error: hiddenError } = await client
+    .from('user_hidden_starter_plans')
+    .select('starter_plan_id')
+    .eq('user_id', userId);
+  if (hiddenError) throw hiddenError;
+  if (hiddenRows.some((row) => row.starter_plan_id === sanoPlanSeedMarker)) return;
+
+  const { data: existingSeedRows, error: existingSeedError } = await client
+    .from('workout_plans')
+    .select('source_plan_id')
+    .eq('user_id', userId)
+    .in('source_plan_id', sanoPlans.map((plan) => plan.id));
+  if (existingSeedError) throw existingSeedError;
+
+  const existingSourceIds = new Set(existingSeedRows.map((plan) => plan.source_plan_id));
+  const plansToInsert = sanoPlans
+    .filter((plan) => !existingSourceIds.has(plan.id))
+    .map((plan) => ({
+      user_id: userId,
+      source_plan_id: plan.id,
+      name: plan.name,
+      focus: plan.focus,
+      duration: plan.duration,
+      exercises: plan.exercises,
+      exercise_configs: plan.exerciseConfigs?.map((exercise) => ({
+        name: exercise.name,
+        exerciseId: exercise.exerciseId,
+        sets: exercise.sets.map((set) => ({ weight: set.weight, reps: set.reps })),
+      })) ?? null,
+    }));
+  if (plansToInsert.length > 0) {
+    const { error: seedError } = await client.from('workout_plans').insert(plansToInsert);
+    if (seedError) {
+      const { data: rowsAfterSeed, error: rowsAfterSeedError } = await client
+        .from('workout_plans')
+        .select('source_plan_id')
+        .eq('user_id', userId)
+        .in('source_plan_id', sanoPlans.map((plan) => plan.id));
+      if (rowsAfterSeedError) throw rowsAfterSeedError;
+      const savedSourceIds = new Set(rowsAfterSeed.map((plan) => plan.source_plan_id));
+      if (sanoPlans.some((plan) => !savedSourceIds.has(plan.id))) {
+        throw new Error(`Nie udało się dodać planów konta sano: ${seedError.message}`);
+      }
+    }
+  }
+
+  const { data: savedRows, error: savedRowsError } = await client
+    .from('workout_plans')
+    .select('id, source_plan_id')
+    .eq('user_id', userId);
+  if (savedRowsError) throw savedRowsError;
+  const sanoPlanIds = new Set(sanoPlans.map((plan) => plan.id));
+  const obsoletePlanIds = savedRows
+    .filter((plan) => !plan.source_plan_id || !sanoPlanIds.has(plan.source_plan_id))
+    .map((plan) => plan.id);
+
+  if (obsoletePlanIds.length > 0) {
+    const { error: deleteError } = await client
+      .from('workout_plans')
+      .delete()
+      .eq('user_id', userId)
+      .in('id', obsoletePlanIds);
+    if (deleteError) throw new Error(`Nie udało się usunąć poprzednich planów konta sano: ${deleteError.message}`);
+  }
+
+  const hiddenStarterIds = [
+    ...starterPlans.map((plan) => plan.id),
+    sanoPlanSeedMarker,
+  ];
+  const { error: hideError } = await client
+    .from('user_hidden_starter_plans')
+    .upsert(
+      hiddenStarterIds.map((starterPlanId) => ({ user_id: userId, starter_plan_id: starterPlanId })),
+      { onConflict: 'user_id,starter_plan_id', ignoreDuplicates: true },
+    );
+  if (hideError) throw new Error(`Nie udało się ukryć poprzednich planów konta sano: ${hideError.message}`);
+}
 
 function isJsonObject(value: Json): value is { [key: string]: Json | undefined } {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -223,6 +340,7 @@ export function GymAppProvider({ children }: PropsWithChildren) {
   const { user, isLoading: authLoading, updateNick } = useAuth();
   const userId = user?.id ?? null;
   const nick = typeof user?.user_metadata.nick === 'string' ? user.user_metadata.nick : 'Treningowiec';
+  const isSanoAccount = nick.trim().toLocaleLowerCase('en-US') === 'sano';
   const [customPlanState, setCustomPlanState] = useState<{
     userId: string;
     plans: WorkoutPlan[];
@@ -305,6 +423,7 @@ export function GymAppProvider({ children }: PropsWithChildren) {
     setPlansError(null);
     try {
       const client = requireSupabase();
+      if (isSanoAccount) await seedSanoPlans(userId);
       const [plansResult, hiddenPlansResult] = await Promise.all([
         client
           .from('workout_plans')
@@ -328,7 +447,7 @@ export function GymAppProvider({ children }: PropsWithChildren) {
     } finally {
       setPlansLoading(false);
     }
-  }, [userId]);
+  }, [isSanoAccount, userId]);
 
   useEffect(() => {
     if (!authLoading && userId) void Promise.resolve().then(reloadPlans);

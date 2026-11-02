@@ -19,15 +19,13 @@ export type MuscleId =
 	| 'abs'
 	| 'obliques';
 
-export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
 export type AnalysisPeriod = 'session' | 'week';
 export type MuscleRole = 'primary' | 'secondary';
-export type MuscleStatus = 'no-stimulus' | 'below' | 'in-range' | 'above-preferred' | 'warning';
+export type MuscleStatus = 'no-stimulus' | 'below' | 'in-range' | 'warning';
 
-export type ExerciseMuscleContribution = {
+export type ExerciseMuscleAssignment = {
 	muscleId: MuscleId;
 	role: MuscleRole;
-	factor: number;
 };
 
 export type VolumeSet = {
@@ -48,28 +46,18 @@ export type VolumeSession = {
 };
 
 export type MuscleRange = {
-	minimum: number;
 	preferredMin: number;
 	preferredMax: number;
-	warningAbove: number;
+	warningFrom: number;
 };
 
 export type MuscleVolume = {
 	muscleId: MuscleId;
 	name: string;
-	effectiveSets: number;
-	directSets: number;
-	indirectSets: number;
+	performedSets: number;
+	hasAuxiliaryStimulus: boolean;
 	range: MuscleRange;
 	status: MuscleStatus;
-	lowerGoalProgress: number;
-	exerciseContributions: {
-		exerciseId: string;
-		exerciseName: string;
-		directSets: number;
-		indirectSets: number;
-		effectiveSets: number;
-	}[];
 };
 
 const muscles: { id: MuscleId; name: string }[] = [
@@ -95,151 +83,118 @@ const muscles: { id: MuscleId; name: string }[] = [
 ];
 
 function mapping(
-	primary: Partial<Record<MuscleId, number>>,
-	secondary: Partial<Record<MuscleId, number>> = {},
-): ExerciseMuscleContribution[] {
+	primary: MuscleId[],
+	secondary: MuscleId[] = [],
+): ExerciseMuscleAssignment[] {
 	return [
-		...Object.entries(primary).map(([muscleId, factor]) => ({
-			muscleId: muscleId as MuscleId,
+		...primary.map((muscleId) => ({
+			muscleId,
 			role: 'primary' as const,
-			factor: factor ?? 1,
 		})),
-		...Object.entries(secondary).map(([muscleId, factor]) => ({
-			muscleId: muscleId as MuscleId,
+		...secondary.map((muscleId) => ({
+			muscleId,
 			role: 'secondary' as const,
-			factor: factor ?? 0,
 		})),
 	];
 }
 
-export const exerciseMuscleMappings: Readonly<Record<string, ExerciseMuscleContribution[]>> = {
-	'bench-press': mapping({ chest: 1 }, { triceps: 0.5, frontDelts: 0.4 }),
-	'incline-dumbbell-press': mapping({ upperChest: 1 }, { chest: 0.25, triceps: 0.45, frontDelts: 0.6 }),
-	'incline-smith-press': mapping({ upperChest: 1 }, { chest: 0.25, triceps: 0.45, frontDelts: 0.6 }),
-	'flat-dumbbell-press': mapping({ chest: 1 }, { triceps: 0.5, frontDelts: 0.4 }),
-	'lat-pulldown': mapping({ lats: 1 }, { biceps: 0.5, rearDelts: 0.2, forearms: 0.2 }),
-	'barbell-row': mapping({ lats: 0.7, upperBack: 0.8 }, { rearDelts: 0.45, biceps: 0.45, forearms: 0.25, lowerBack: 0.2 }),
-	'seated-cable-row': mapping({ lats: 0.65, upperBack: 0.8 }, { rearDelts: 0.45, biceps: 0.45, forearms: 0.2 }),
-	'barbell-squat': mapping({ quads: 1, glutes: 0.7 }, { hamstrings: 0.25, lowerBack: 0.25, abs: 0.2, adductors: 0.3 }),
-	'romanian-deadlift': mapping({ hamstrings: 1, glutes: 0.8 }, { lowerBack: 0.45, forearms: 0.2 }),
-	'deadlift': mapping({ glutes: 0.8, hamstrings: 0.7, lowerBack: 0.7 }, { traps: 0.35, forearms: 0.3, quads: 0.25 }),
-	'lateral-raise': mapping({ lateralDelts: 1 }, { traps: 0.2 }),
-	'cable-lateral-raise': mapping({ lateralDelts: 1 }, { traps: 0.2 }),
-	'overhead-press': mapping({ frontDelts: 0.8, lateralDelts: 0.55 }, { triceps: 0.5, abs: 0.2 }),
-	'dumbbell-curl': mapping({ biceps: 1 }, { forearms: 0.25 }),
-	'barbell-curl': mapping({ biceps: 1 }, { forearms: 0.3 }),
-	'incline-dumbbell-curl': mapping({ biceps: 1 }, { forearms: 0.2 }),
-	'preacher-curl': mapping({ biceps: 1 }, { forearms: 0.15 }),
-	'cable-hammer-curl': mapping({ biceps: 0.55, forearms: 0.55 }),
-	'triceps-pushdown': mapping({ triceps: 1 }, { forearms: 0.15 }),
-	'cable-overhead-triceps-extension': mapping({ triceps: 1 }),
-	'pull-up': mapping({ lats: 1 }, { biceps: 0.55, rearDelts: 0.2, forearms: 0.3 }),
-	'leg-press': mapping({ quads: 1 }, { glutes: 0.4, adductors: 0.2 }),
-	'leg-extension': mapping({ quads: 1 }),
-	'leg-curl': mapping({ hamstrings: 1 }, { calves: 0.15 }),
-	'seated-leg-curl': mapping({ hamstrings: 1 }, { calves: 0.1 }),
-	'calf-raise': mapping({ calves: 1 }),
-	'face-pull': mapping({ rearDelts: 0.8, upperBack: 0.5 }, { traps: 0.35 }),
-	'reverse-pec-deck': mapping({ rearDelts: 1 }, { traps: 0.25, upperBack: 0.2 }),
-	'dips': mapping({ triceps: 0.8 }, { chest: 0.55, frontDelts: 0.35 }),
-	'crunch': mapping({ abs: 1 }, { obliques: 0.25 }),
-	'cable-crunch': mapping({ abs: 1 }, { obliques: 0.25 }),
-	'plank': mapping({ abs: 0.6 }, { obliques: 0.4, glutes: 0.15 }),
-	'hanging-leg-raise': mapping({ abs: 0.8 }, { obliques: 0.25 }),
+export const exerciseMuscleMappings: Readonly<Record<string, ExerciseMuscleAssignment[]>> = {
+	'bench-press': mapping(['chest'], ['triceps', 'frontDelts']),
+	'incline-dumbbell-press': mapping(['upperChest'], ['chest', 'triceps', 'frontDelts']),
+	'incline-smith-press': mapping(['upperChest'], ['chest', 'triceps', 'frontDelts']),
+	'flat-dumbbell-press': mapping(['chest'], ['triceps', 'frontDelts']),
+	'lat-pulldown': mapping(['lats'], ['biceps', 'rearDelts', 'forearms']),
+	'barbell-row': mapping(['lats', 'upperBack'], ['rearDelts', 'biceps', 'forearms', 'lowerBack']),
+	'seated-cable-row': mapping(['lats', 'upperBack'], ['rearDelts', 'biceps', 'forearms']),
+	'barbell-squat': mapping(['quads', 'glutes'], ['hamstrings', 'lowerBack', 'abs', 'adductors']),
+	'romanian-deadlift': mapping(['hamstrings', 'glutes'], ['lowerBack', 'forearms']),
+	'deadlift': mapping(['glutes', 'hamstrings', 'lowerBack'], ['traps', 'forearms', 'quads']),
+	'lateral-raise': mapping(['lateralDelts'], ['traps']),
+	'cable-lateral-raise': mapping(['lateralDelts'], ['traps']),
+	'overhead-press': mapping(['frontDelts', 'lateralDelts'], ['triceps', 'abs']),
+	'dumbbell-curl': mapping(['biceps'], ['forearms']),
+	'barbell-curl': mapping(['biceps'], ['forearms']),
+	'incline-dumbbell-curl': mapping(['biceps'], ['forearms']),
+	'preacher-curl': mapping(['biceps'], ['forearms']),
+	'cable-hammer-curl': mapping(['biceps', 'forearms']),
+	'triceps-pushdown': mapping(['triceps'], ['forearms']),
+	'cable-overhead-triceps-extension': mapping(['triceps']),
+	'pull-up': mapping(['lats'], ['biceps', 'rearDelts', 'forearms']),
+	'leg-press': mapping(['quads'], ['glutes', 'adductors']),
+	'leg-extension': mapping(['quads']),
+	'leg-curl': mapping(['hamstrings'], ['calves']),
+	'seated-leg-curl': mapping(['hamstrings'], ['calves']),
+	'calf-raise': mapping(['calves']),
+	'face-pull': mapping(['rearDelts', 'upperBack'], ['traps']),
+	'reverse-pec-deck': mapping(['rearDelts'], ['traps', 'upperBack']),
+	'dips': mapping(['triceps'], ['chest', 'frontDelts']),
+	'crunch': mapping(['abs'], ['obliques']),
+	'cable-crunch': mapping(['abs'], ['obliques']),
+	'plank': mapping(['abs'], ['obliques', 'glutes']),
+	'hanging-leg-raise': mapping(['abs'], ['obliques']),
 };
 
-const weeklyRanges: Record<ExperienceLevel, Partial<Record<MuscleId, MuscleRange>>> = {
-	beginner: {
-		chest: { minimum: 4, preferredMin: 6, preferredMax: 10, warningAbove: 14 },
-		upperChest: { minimum: 2, preferredMin: 4, preferredMax: 8, warningAbove: 12 },
-		lats: { minimum: 4, preferredMin: 6, preferredMax: 10, warningAbove: 14 },
-		upperBack: { minimum: 4, preferredMin: 6, preferredMax: 10, warningAbove: 14 },
-		traps: { minimum: 2, preferredMin: 4, preferredMax: 8, warningAbove: 12 },
-		lowerBack: { minimum: 2, preferredMin: 4, preferredMax: 6, warningAbove: 10 },
-		frontDelts: { minimum: 2, preferredMin: 4, preferredMax: 8, warningAbove: 12 },
-		lateralDelts: { minimum: 4, preferredMin: 6, preferredMax: 10, warningAbove: 14 },
-		rearDelts: { minimum: 2, preferredMin: 4, preferredMax: 8, warningAbove: 12 },
-		biceps: { minimum: 4, preferredMin: 6, preferredMax: 10, warningAbove: 14 },
-		triceps: { minimum: 4, preferredMin: 6, preferredMax: 10, warningAbove: 14 },
-		forearms: { minimum: 2, preferredMin: 4, preferredMax: 8, warningAbove: 12 },
-		quads: { minimum: 4, preferredMin: 6, preferredMax: 10, warningAbove: 14 },
-		hamstrings: { minimum: 4, preferredMin: 6, preferredMax: 10, warningAbove: 14 },
-		glutes: { minimum: 2, preferredMin: 4, preferredMax: 8, warningAbove: 12 },
-		adductors: { minimum: 2, preferredMin: 4, preferredMax: 8, warningAbove: 12 },
-		calves: { minimum: 4, preferredMin: 6, preferredMax: 10, warningAbove: 14 },
-		abs: { minimum: 2, preferredMin: 4, preferredMax: 8, warningAbove: 12 },
-		obliques: { minimum: 2, preferredMin: 4, preferredMax: 8, warningAbove: 12 },
-	},
-	intermediate: {
-		chest: { minimum: 6, preferredMin: 8, preferredMax: 14, warningAbove: 18 },
-		upperChest: { minimum: 3, preferredMin: 5, preferredMax: 10, warningAbove: 15 },
-		lats: { minimum: 6, preferredMin: 8, preferredMax: 14, warningAbove: 18 },
-		upperBack: { minimum: 6, preferredMin: 8, preferredMax: 14, warningAbove: 18 },
-		traps: { minimum: 3, preferredMin: 5, preferredMax: 10, warningAbove: 15 },
-		lowerBack: { minimum: 3, preferredMin: 4, preferredMax: 8, warningAbove: 12 },
-		frontDelts: { minimum: 3, preferredMin: 4, preferredMax: 8, warningAbove: 12 },
-		lateralDelts: { minimum: 4, preferredMin: 6, preferredMax: 12, warningAbove: 16 },
-		rearDelts: { minimum: 4, preferredMin: 6, preferredMax: 10, warningAbove: 14 },
-		biceps: { minimum: 6, preferredMin: 8, preferredMax: 14, warningAbove: 18 },
-		triceps: { minimum: 6, preferredMin: 8, preferredMax: 14, warningAbove: 18 },
-		forearms: { minimum: 3, preferredMin: 5, preferredMax: 10, warningAbove: 14 },
-		quads: { minimum: 6, preferredMin: 8, preferredMax: 14, warningAbove: 18 },
-		hamstrings: { minimum: 6, preferredMin: 8, preferredMax: 14, warningAbove: 18 },
-		glutes: { minimum: 4, preferredMin: 6, preferredMax: 12, warningAbove: 16 },
-		adductors: { minimum: 3, preferredMin: 5, preferredMax: 10, warningAbove: 14 },
-		calves: { minimum: 6, preferredMin: 8, preferredMax: 14, warningAbove: 18 },
-		abs: { minimum: 4, preferredMin: 6, preferredMax: 12, warningAbove: 16 },
-		obliques: { minimum: 3, preferredMin: 5, preferredMax: 10, warningAbove: 14 },
-	},
-	advanced: {
-		chest: { minimum: 8, preferredMin: 10, preferredMax: 16, warningAbove: 22 },
-		upperChest: { minimum: 4, preferredMin: 6, preferredMax: 12, warningAbove: 18 },
-		lats: { minimum: 8, preferredMin: 10, preferredMax: 16, warningAbove: 22 },
-		upperBack: { minimum: 8, preferredMin: 10, preferredMax: 16, warningAbove: 22 },
-		traps: { minimum: 4, preferredMin: 6, preferredMax: 12, warningAbove: 18 },
-		lowerBack: { minimum: 3, preferredMin: 5, preferredMax: 9, warningAbove: 14 },
-		frontDelts: { minimum: 3, preferredMin: 5, preferredMax: 9, warningAbove: 14 },
-		lateralDelts: { minimum: 6, preferredMin: 8, preferredMax: 14, warningAbove: 20 },
-		rearDelts: { minimum: 6, preferredMin: 8, preferredMax: 14, warningAbove: 20 },
-		biceps: { minimum: 8, preferredMin: 10, preferredMax: 16, warningAbove: 22 },
-		triceps: { minimum: 8, preferredMin: 10, preferredMax: 16, warningAbove: 22 },
-		forearms: { minimum: 4, preferredMin: 6, preferredMax: 12, warningAbove: 18 },
-		quads: { minimum: 8, preferredMin: 10, preferredMax: 16, warningAbove: 22 },
-		hamstrings: { minimum: 8, preferredMin: 10, preferredMax: 16, warningAbove: 22 },
-		glutes: { minimum: 6, preferredMin: 8, preferredMax: 14, warningAbove: 20 },
-		adductors: { minimum: 4, preferredMin: 6, preferredMax: 12, warningAbove: 18 },
-		calves: { minimum: 8, preferredMin: 10, preferredMax: 16, warningAbove: 22 },
-		abs: { minimum: 4, preferredMin: 6, preferredMax: 12, warningAbove: 18 },
-		obliques: { minimum: 3, preferredMin: 5, preferredMax: 10, warningAbove: 15 },
-	},
+const weeklyRanges: Record<MuscleId, MuscleRange> = {
+	chest: { preferredMin: 8, preferredMax: 16, warningFrom: 17 },
+	upperChest: { preferredMin: 8, preferredMax: 16, warningFrom: 17 },
+	lats: { preferredMin: 8, preferredMax: 18, warningFrom: 19 },
+	upperBack: { preferredMin: 8, preferredMax: 18, warningFrom: 19 },
+	traps: { preferredMin: 8, preferredMax: 18, warningFrom: 19 },
+	lowerBack: { preferredMin: 8, preferredMax: 18, warningFrom: 19 },
+	frontDelts: { preferredMin: 6, preferredMax: 14, warningFrom: 15 },
+	lateralDelts: { preferredMin: 6, preferredMax: 14, warningFrom: 15 },
+	rearDelts: { preferredMin: 6, preferredMax: 14, warningFrom: 15 },
+	biceps: { preferredMin: 6, preferredMax: 14, warningFrom: 15 },
+	triceps: { preferredMin: 6, preferredMax: 14, warningFrom: 15 },
+	forearms: { preferredMin: 5, preferredMax: 12, warningFrom: 13 },
+	quads: { preferredMin: 6, preferredMax: 14, warningFrom: 15 },
+	hamstrings: { preferredMin: 5, preferredMax: 12, warningFrom: 13 },
+	glutes: { preferredMin: 6, preferredMax: 14, warningFrom: 15 },
+	adductors: { preferredMin: 5, preferredMax: 12, warningFrom: 13 },
+	calves: { preferredMin: 5, preferredMax: 12, warningFrom: 13 },
+	abs: { preferredMin: 5, preferredMax: 12, warningFrom: 13 },
+	obliques: { preferredMin: 5, preferredMax: 12, warningFrom: 13 },
+};
+
+const sessionRanges: Record<MuscleId, MuscleRange> = {
+	chest: { preferredMin: 3, preferredMax: 8, warningFrom: 9 },
+	upperChest: { preferredMin: 3, preferredMax: 8, warningFrom: 9 },
+	lats: { preferredMin: 4, preferredMax: 9, warningFrom: 10 },
+	upperBack: { preferredMin: 4, preferredMax: 9, warningFrom: 10 },
+	traps: { preferredMin: 4, preferredMax: 9, warningFrom: 10 },
+	lowerBack: { preferredMin: 4, preferredMax: 9, warningFrom: 10 },
+	frontDelts: { preferredMin: 3, preferredMax: 6, warningFrom: 7 },
+	lateralDelts: { preferredMin: 3, preferredMax: 6, warningFrom: 7 },
+	rearDelts: { preferredMin: 3, preferredMax: 6, warningFrom: 7 },
+	biceps: { preferredMin: 3, preferredMax: 6, warningFrom: 7 },
+	triceps: { preferredMin: 3, preferredMax: 6, warningFrom: 7 },
+	forearms: { preferredMin: 3, preferredMax: 6, warningFrom: 7 },
+	quads: { preferredMin: 3, preferredMax: 8, warningFrom: 9 },
+	hamstrings: { preferredMin: 3, preferredMax: 6, warningFrom: 7 },
+	glutes: { preferredMin: 3, preferredMax: 8, warningFrom: 9 },
+	adductors: { preferredMin: 3, preferredMax: 5, warningFrom: 6 },
+	calves: { preferredMin: 3, preferredMax: 6, warningFrom: 7 },
+	abs: { preferredMin: 3, preferredMax: 6, warningFrom: 7 },
+	obliques: { preferredMin: 3, preferredMax: 6, warningFrom: 7 },
 };
 
 export const defaultMuscleRanges = weeklyRanges;
-
-const sessionRangeDivisor: Record<MuscleId, number> = {
-	chest: 2, upperChest: 2, lats: 2, upperBack: 2, traps: 2, lowerBack: 2,
-	frontDelts: 2, lateralDelts: 2, rearDelts: 2, biceps: 2, triceps: 2,
-	forearms: 2, quads: 2, hamstrings: 2, glutes: 2, adductors: 2, calves: 2,
-	abs: 2, obliques: 2,
-};
+export const defaultSessionRanges = sessionRanges;
 
 function rangeFor(
 	muscleId: MuscleId,
-	level: ExperienceLevel,
 	period: AnalysisPeriod,
 	overrides?: Partial<Record<MuscleId, MuscleRange>>,
 ): MuscleRange {
-	const range = overrides?.[muscleId] ?? weeklyRanges[level][muscleId] ?? {
-		minimum: 0, preferredMin: 0, preferredMax: 0, warningAbove: 0,
+	return overrides?.[muscleId] ?? (period === 'session' ? sessionRanges : weeklyRanges)[muscleId] ?? {
+		preferredMin: 0, preferredMax: 0, warningFrom: Number.POSITIVE_INFINITY,
 	};
-	if (period === 'week') return range;
-	const divisor = sessionRangeDivisor[muscleId];
-	return {
-		minimum: range.minimum / divisor,
-		preferredMin: range.preferredMin / divisor,
-		preferredMax: range.preferredMax / divisor,
-		warningAbove: range.warningAbove / divisor,
-	};
+}
+
+function statusForCount(performedSets: number, range: MuscleRange): MuscleStatus {
+	if (performedSets < range.preferredMin) return 'below';
+	if (performedSets >= range.warningFrom) return 'warning';
+	return 'in-range';
 }
 
 function dateParts(timestamp: number, timeZone: string) {
@@ -265,6 +220,10 @@ function isCompleted(set: VolumeSet) {
 	return set.completed === true || set.status === 'completed';
 }
 
+export function areAllSetsCompleted(statuses: readonly ('pending' | 'completed')[]) {
+	return statuses.length > 0 && statuses.every((status) => status === 'completed');
+}
+
 export function calculateMuscleVolume({
 	exercises,
 	sessions = [],
@@ -272,7 +231,6 @@ export function calculateMuscleVolume({
 	now,
 	weekKey,
 	timeZone = 'UTC',
-	level = 'beginner',
 	rangeOverrides,
 }: {
 	exercises: VolumeExercise[];
@@ -281,7 +239,6 @@ export function calculateMuscleVolume({
 	now?: number;
 	weekKey?: string;
 	timeZone?: string;
-	level?: ExperienceLevel;
 	rangeOverrides?: Partial<Record<MuscleId, MuscleRange>>;
 }): MuscleVolume[] {
 	const currentWeek = weekKey ?? getLocalWeekKey(now ?? Date.now(), timeZone);
@@ -293,7 +250,7 @@ export function calculateMuscleVolume({
 			...exercises,
 		]
 		: exercises;
-	const totals = new Map<MuscleId, Map<string, { name: string; direct: number; indirect: number }>>();
+	const totals = new Map<MuscleId, { performedSets: number; hasAuxiliaryStimulus: boolean }>();
 
 	for (const exercise of sources) {
 		const exerciseId = exercise.exerciseId;
@@ -302,48 +259,32 @@ export function calculateMuscleVolume({
 		const completedSets = exercise.sets.filter(isCompleted).length;
 		if (completedSets === 0) continue;
 		for (const contribution of contributions) {
-			if (!Number.isFinite(contribution.factor) || contribution.factor <= 0) continue;
-			const byExercise = totals.get(contribution.muscleId) ?? new Map();
-			const current = byExercise.get(exerciseId) ?? { name: exercise.name, direct: 0, indirect: 0 };
-			const weightedSets = completedSets * contribution.factor;
-			if (contribution.role === 'primary') current.direct += weightedSets;
-			else current.indirect += weightedSets;
-			byExercise.set(exerciseId, current);
-			totals.set(contribution.muscleId, byExercise);
+			const current = totals.get(contribution.muscleId) ?? {
+				performedSets: 0,
+				hasAuxiliaryStimulus: false,
+			};
+			if (contribution.role === 'primary') current.performedSets += completedSets;
+			else current.hasAuxiliaryStimulus = true;
+			totals.set(contribution.muscleId, current);
 		}
 	}
 
 	return muscles.map(({ id, name }) => {
-		const contributions = [...(totals.get(id)?.entries() ?? [])].map(([exerciseId, value]) => ({
-			exerciseId,
-			exerciseName: value.name,
-			directSets: value.direct,
-			indirectSets: value.indirect,
-			effectiveSets: value.direct + value.indirect,
-		}));
-		const directSets = contributions.reduce((sum, contribution) => sum + contribution.directSets, 0);
-		const indirectSets = contributions.reduce((sum, contribution) => sum + contribution.indirectSets, 0);
-		const effectiveSets = directSets + indirectSets;
-		const range = rangeFor(id, level, period, rangeOverrides);
-		const status: MuscleStatus = effectiveSets === 0
+		const { performedSets, hasAuxiliaryStimulus } = totals.get(id) ?? {
+			performedSets: 0,
+			hasAuxiliaryStimulus: false,
+		};
+		const range = rangeFor(id, period, rangeOverrides);
+		const status: MuscleStatus = performedSets === 0
 			? 'no-stimulus'
-			: effectiveSets < range.minimum
-				? 'below'
-				: effectiveSets <= range.preferredMax
-					? 'in-range'
-					: effectiveSets <= range.warningAbove
-						? 'above-preferred'
-						: 'warning';
+			: statusForCount(performedSets, range);
 		return {
 			muscleId: id,
 			name,
-			effectiveSets,
-			directSets,
-			indirectSets,
+			performedSets,
+			hasAuxiliaryStimulus,
 			range,
 			status,
-			lowerGoalProgress: range.minimum === 0 ? 0 : Math.min(100, (effectiveSets / range.minimum) * 100),
-			exerciseContributions: contributions,
 		};
 	});
 }

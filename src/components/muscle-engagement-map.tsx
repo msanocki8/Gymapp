@@ -65,18 +65,25 @@ const volumeColors: Record<MuscleStatus, { fill: string; glow: string }> = {
   'no-stimulus': { fill: '#303B34', glow: '#536159' },
   below: { fill: '#3979D6', glow: '#69A8FF' },
   'in-range': { fill: '#79DD20', glow: '#B7FF35' },
-  'above-preferred': { fill: '#79DD20', glow: '#B7FF35' },
   warning: { fill: '#D94343', glow: '#FF7474' },
+};
+const volumeHighlights: Record<MuscleStatus, string> = {
+  'no-stimulus': '#829087',
+  below: '#C2E4FF',
+  'in-range': '#E8FFAA',
+  warning: '#FFC0C0',
 };
 
 const frontRegions: MuscleRegion[] = [
-  { group: 'lateralDelts', path: 'M87 92 C79 91 72 97 71 107 C71 115 77 121 85 124 L99 113 L106 101 Z' },
   { group: 'frontDelts', path: 'M98 88 C87 85 76 91 73 102 C70 112 76 123 87 127 L105 116 L116 101 Z' },
+  { group: 'lateralDelts', path: 'M99 87 C88 80 73 84 64 94 C55 104 56 117 64 127 C71 136 82 137 92 130 L107 116 C114 108 117 99 112 93 C109 90 104 88 99 87 Z' },
   { group: 'chest', path: 'M137 104 C127 96 111 95 99 101 C91 105 89 115 92 126 C96 139 111 148 133 150 C137 140 139 127 137 104 Z' },
   { group: 'upperChest', path: 'M136 105 C126 99 111 98 100 103 C96 106 95 110 95 115 C108 112 123 114 136 121 Z' },
   { group: 'biceps', path: 'M76 130 C68 135 65 147 68 159 L76 183 C79 190 87 192 92 187 L89 159 C88 150 91 142 97 136 Z' },
   { group: 'forearms', path: 'M68 190 C63 197 63 207 66 217 L78 247 C81 254 89 255 94 250 L83 215 C81 207 82 198 87 191 Z' },
-  { group: 'abs', path: 'M117 153 C123 150 131 150 137 153 L137 226 C131 231 123 231 117 226 Z' },
+  { group: 'abs', path: 'M119 157 C124 154 131 154 138 157 L138 177 C132 180 125 180 119 177 Z' },
+  { group: 'abs', path: 'M119 181 C125 184 132 184 138 181 L138 201 C132 204 125 204 119 201 Z' },
+  { group: 'abs', path: 'M119 205 C125 208 132 208 138 205 L138 224 C132 227 125 227 119 224 Z' },
   { group: 'obliques', path: 'M94 148 C103 152 109 154 113 155 L113 218 C105 216 97 211 93 203 Z' },
   { group: 'quads', path: 'M111 260 C119 255 130 255 137 260 L137 349 C132 358 120 361 111 354 C105 340 103 324 104 306 Z' },
   { group: 'adductors', path: 'M129 266 C134 268 137 275 137 286 L136 329 C132 326 129 318 128 307 Z' },
@@ -84,8 +91,8 @@ const frontRegions: MuscleRegion[] = [
 ];
 
 const backRegions: MuscleRegion[] = [
-  { group: 'lateralDelts', path: 'M87 92 C79 91 72 97 71 107 C71 115 77 121 85 124 L99 113 L106 101 Z' },
   { group: 'rearDelts', path: 'M98 88 C87 85 76 91 73 102 C70 112 76 123 87 127 L105 116 L116 101 Z' },
+  { group: 'lateralDelts', path: 'M99 87 C88 80 73 84 64 94 C55 104 56 117 64 127 C71 136 82 137 92 130 L107 116 C114 108 117 99 112 93 C109 90 104 88 99 87 Z' },
   { group: 'traps', path: 'M140 82 C129 82 117 91 108 103 L124 123 L138 141 Z' },
   { group: 'upperBack', path: 'M139 119 C130 123 124 133 121 146 L124 165 L138 159 Z' },
   { group: 'triceps', path: 'M76 130 C68 135 65 147 68 159 L76 183 C79 190 87 192 92 187 L89 159 C88 150 91 142 97 136 Z' },
@@ -148,6 +155,10 @@ function gradientId(prefix: string, role: MuscleRole) {
   return `${prefix}-${role}`;
 }
 
+function volumeGradientId(prefix: string, muscleId: MuscleId) {
+  return `${prefix}-volume-${muscleId.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+}
+
 function MuscleShape({
   region,
   roles,
@@ -177,8 +188,21 @@ function MuscleShape({
           transform={transform}
           fill="none"
           stroke={strokeColor}
+          strokeOpacity={0.2}
+          strokeWidth={7}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          onPress={onMuscleSelect ? () => onMuscleSelect(region.group) : undefined}
+        />
+      )}
+      {(volume ? volume.status !== 'no-stimulus' : role !== 'inactive') && (
+        <Path
+          d={region.path}
+          transform={transform}
+          fill="none"
+          stroke={strokeColor}
           strokeOpacity={0.3}
-          strokeWidth={10}
+          strokeWidth={2.8}
           strokeLinecap="round"
           strokeLinejoin="round"
           onPress={onMuscleSelect ? () => onMuscleSelect(region.group) : undefined}
@@ -187,12 +211,12 @@ function MuscleShape({
       <Path
         d={region.path}
         transform={transform}
-        fill={volume ? aggregateColor.fill : `url(#${gradientId(id, role)})`}
-        stroke={strokeColor}
-        strokeOpacity={volume ? (selected ? 1 : 0.9) : role === 'inactive' ? 0.62 : 0.96}
-        strokeWidth={volume ? (selected ? 2.6 : 1.5) : role === 'inactive' ? 1.1 : 1.5}
+        fill={volume ? `url(#${volumeGradientId(id, region.group)})` : `url(#${gradientId(id, role)})`}
+        stroke="#18211B"
+        strokeOpacity={0.92}
+        strokeWidth={1.15}
         strokeLinejoin="round"
-        accessibilityLabel={volume ? `${volume.name}: ${volume.effectiveSets.toFixed(1)} serii efektywnych` : undefined}
+        accessibilityLabel={volume ? `${volume.name}: ${volume.performedSets} wykonanych serii, status: ${volume.status}` : undefined}
         onPress={onMuscleSelect ? () => onMuscleSelect(region.group) : undefined}
       />
     </>
@@ -234,15 +258,15 @@ export function MuscleEngagementMap({
 
   return (
     <View
-      style={{ alignItems: 'center', justifyContent: 'center', height: 318, width: '100%', marginTop: 10, position: 'relative' }}
+      style={{ alignItems: 'center', justifyContent: 'center', height: 336, width: '100%', marginTop: 10, position: 'relative' }}
     >
       <View
         accessibilityRole="toolbar"
         style={{ position: 'absolute', top: 6, left: 6, right: 6, zIndex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
       >
         <View style={{ borderRadius: 999, borderWidth: 1, borderColor: 'rgba(183,255,53,0.22)', backgroundColor: 'rgba(7,12,9,0.86)', paddingHorizontal: 9, paddingVertical: 6 }}>
-          <Text style={{ color: '#D8E6D8', fontSize: 8, fontWeight: '800', letterSpacing: 0.5 }}>
-            PERSPEKTYWA: {view === 'front' ? 'PRZÓD (FRONT)' : 'TYŁ (BACK)'}
+          <Text style={{ color: '#D8E6D8', fontSize: 9, fontWeight: '800', letterSpacing: 0.7 }}>
+            ({view === 'front' ? 'FRONT' : 'BACK'})
           </Text>
         </View>
         <View style={{ flexDirection: 'row', borderRadius: 999, borderWidth: 1, borderColor: 'rgba(183,255,53,0.24)', backgroundColor: 'rgba(7,12,9,0.9)', padding: 3 }}>
@@ -268,7 +292,7 @@ export function MuscleEngagementMap({
       <View
         accessible
         accessibilityLabel={volumes
-          ? `Mapa skumulowanej objętości mięśni, widok ${view === 'front' ? 'z przodu' : 'z tyłu'}`
+          ? `Mapa statusu i liczby wykonanych serii mięśni, widok ${view === 'front' ? 'z przodu' : 'z tyłu'}`
           : `Mapa mięśni dla ćwiczenia ${exercise?.name ?? 'ćwiczenia'}, widok ${view === 'front' ? 'z przodu' : 'z tyłu'}`}
         accessibilityRole="image"
         style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
@@ -278,18 +302,37 @@ export function MuscleEngagementMap({
           {gradient('primary')}
           {gradient('secondary')}
           {gradient('inactive')}
+          <LinearGradient id={`${id}-body`} x1="0" y1="0.25" x2="1" y2="0.65">
+            <Stop offset="0" stopColor="#66736A" />
+            <Stop offset="0.28" stopColor="#39443C" />
+            <Stop offset="0.68" stopColor="#263129" />
+            <Stop offset="1" stopColor="#141C17" />
+          </LinearGradient>
+          {Array.from(volumesById.values()).map((volume) => (
+            <LinearGradient
+              key={volumeGradientId(id, volume.muscleId)}
+              id={volumeGradientId(id, volume.muscleId)}
+              x1="0"
+              y1="0"
+              x2="0.8"
+              y2="1">
+              <Stop offset="0" stopColor={volumeHighlights[volume.status]} />
+              <Stop offset="0.32" stopColor={volumeColors[volume.status].glow} />
+              <Stop offset="1" stopColor={volumeColors[volume.status].fill} />
+            </LinearGradient>
+          ))}
         </Defs>
         <Ellipse cx="140" cy="489" rx="58" ry="5" fill="#6DEB59" opacity={0.09} />
 
-        <Path d={leg} fill="#252F29" stroke="#66736A" strokeWidth={1.5} strokeLinejoin="round" />
-        <Path d={leg} transform="translate(280 0) scale(-1 1)" fill="#252F29" stroke="#66736A" strokeWidth={1.5} strokeLinejoin="round" />
-        <Path d={arm} fill="#29342D" stroke="#66736A" strokeWidth={1.5} strokeLinejoin="round" />
-        <Path d={arm} transform="translate(280 0) scale(-1 1)" fill="#29342D" stroke="#66736A" strokeWidth={1.5} strokeLinejoin="round" />
-        <Path d={torso} fill="#29342D" stroke="#768379" strokeWidth={1.8} strokeLinejoin="round" />
+        <Path d={leg} fill={`url(#${id}-body)`} stroke="#738177" strokeWidth={1.5} strokeLinejoin="round" />
+        <Path d={leg} transform="translate(280 0) scale(-1 1)" fill={`url(#${id}-body)`} stroke="#738177" strokeWidth={1.5} strokeLinejoin="round" />
+        <Path d={arm} fill={`url(#${id}-body)`} stroke="#738177" strokeWidth={1.5} strokeLinejoin="round" />
+        <Path d={arm} transform="translate(280 0) scale(-1 1)" fill={`url(#${id}-body)`} stroke="#738177" strokeWidth={1.5} strokeLinejoin="round" />
+        <Path d={torso} fill={`url(#${id}-body)`} stroke="#829087" strokeWidth={1.8} strokeLinejoin="round" />
 
-        {halfRegions.map((region) => (
+        {halfRegions.map((region, index) => (
           <MuscleShape
-            key={`left-${region.group}`}
+            key={`left-${region.group}-${index}`}
             region={region}
             roles={roles}
             id={id}
@@ -298,9 +341,9 @@ export function MuscleEngagementMap({
             onMuscleSelect={volumes ? onMuscleSelect : undefined}
           />
         ))}
-        {halfRegions.map((region) => (
+        {halfRegions.map((region, index) => (
           <MuscleShape
-            key={`right-${region.group}`}
+            key={`right-${region.group}-${index}`}
             region={region}
             roles={roles}
             id={id}
@@ -311,8 +354,8 @@ export function MuscleEngagementMap({
           />
         ))}
 
-        <Circle cx="140" cy="40" r="22" fill="#303B34" stroke="#768379" strokeWidth={1.6} />
-        <Path d="M126 60 C129 73 125 79 116 83 L164 83 C155 79 151 73 154 60 Z" fill="#303B34" stroke="#66736A" strokeWidth={1.2} />
+        <Circle cx="140" cy="40" r="22" fill={`url(#${id}-body)`} stroke="#829087" strokeWidth={1.6} />
+        <Path d="M126 60 C129 73 125 79 116 83 L164 83 C155 79 151 73 154 60 Z" fill={`url(#${id}-body)`} stroke="#738177" strokeWidth={1.2} />
         {view === 'front' ? (
           <Path d="M140 30 L140 48 M135 53 C138 55 142 55 145 53" fill="none" stroke="#89968C" strokeOpacity={0.42} strokeWidth={1.2} strokeLinecap="round" />
         ) : (

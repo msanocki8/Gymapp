@@ -1,30 +1,37 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ViewStyle } from 'react-native';
 
 import { BodyView, MuscleEngagementMap } from '@/components/muscle-engagement-map';
-import type { AnalysisPeriod, ExperienceLevel, MuscleId, MuscleStatus, MuscleVolume } from '@/lib/muscle-volume';
-
-const levelLabels: Record<ExperienceLevel, string> = {
-	beginner: 'Początkujący',
-	intermediate: 'Średni',
-	advanced: 'Zaawansowany',
-};
+import type { AnalysisPeriod, MuscleId, MuscleStatus, MuscleVolume } from '@/lib/muscle-volume';
 
 const statusLabels: Record<MuscleStatus, string> = {
-	'no-stimulus': 'Brak bodźca',
-	below: 'Poniżej celu',
+	'no-stimulus': 'Brak serii głównych',
+	below: 'Niska objętość',
 	'in-range': 'W zakresie',
-	'above-preferred': 'Powyżej preferowanego',
-	warning: 'Powyżej progu ostrzegawczego',
+	warning: 'Wysoka objętość',
 };
 
 const statusColors: Record<MuscleStatus, string> = {
 	'no-stimulus': '#738078',
 	below: '#69A8FF',
-	'in-range': '#B7FF35',
-	'above-preferred': '#B7FF35',
+	'in-range': '#79DD20',
 	warning: '#FF7474',
 };
+
+type CrossPlatformShadowStyle = ViewStyle & { boxShadow?: string };
+
+const cardGlowStyle = Platform.select<CrossPlatformShadowStyle>({
+	web: { boxShadow: '0 0 20px rgba(16, 185, 129, 0.2)' },
+	default: {
+		shadowColor: '#10b981',
+		shadowOpacity: 0.16,
+		shadowRadius: 18,
+		shadowOffset: { width: 0, height: 5 },
+		elevation: 4,
+	},
+});
 
 function formatSets(value: number) {
 	return Number.isInteger(value) ? String(value) : value.toFixed(1);
@@ -32,34 +39,37 @@ function formatSets(value: number) {
 
 export function MuscleVolumePanel({
 	volumes,
-	projectedVolumes,
+	sessionVolumes,
+	weeklyVolumes,
 	onPeriodChange,
-	onLevelChange,
 	period,
-	level,
 }: {
 	volumes: MuscleVolume[];
-	projectedVolumes: MuscleVolume[];
+	sessionVolumes: MuscleVolume[];
+	weeklyVolumes: MuscleVolume[];
 	onPeriodChange: (period: AnalysisPeriod) => void;
-	onLevelChange: (level: ExperienceLevel) => void;
 	period: AnalysisPeriod;
-	level: ExperienceLevel;
 }) {
 	const [bodyView, setBodyView] = useState<BodyView>('front');
 	const [selectedMuscleId, setSelectedMuscleId] = useState<MuscleId>('chest');
 	const selected = volumes.find((muscle) => muscle.muscleId === selectedMuscleId) ?? volumes[0];
-	const projected = projectedVolumes.find((muscle) => muscle.muscleId === selected?.muscleId);
-	const inRangeCount = volumes.filter((muscle) => muscle.status === 'in-range' || muscle.status === 'above-preferred').length;
+	const selectedSession = sessionVolumes.find((muscle) => muscle.muscleId === selected?.muscleId);
+	const selectedWeek = weeklyVolumes.find((muscle) => muscle.muscleId === selected?.muscleId);
+	const inRangeCount = volumes.filter((muscle) => muscle.status === 'in-range').length;
 	const belowCount = volumes.filter((muscle) => muscle.status === 'below').length;
 	const warningCount = volumes.filter((muscle) => muscle.status === 'warning').length;
 	const noStimulusCount = volumes.filter((muscle) => muscle.status === 'no-stimulus').length;
 
 	return (
-		<View className="rounded-3xl border border-zinc-800/80 bg-zinc-900/80" style={styles.card}>
+		<View className="overflow-hidden rounded-3xl border border-zinc-800/80 bg-zinc-900/80" style={[styles.card, cardGlowStyle]}>
+			<LinearGradient
+				colors={['rgba(22, 31, 22, 0.98)', 'rgba(12, 17, 14, 0.98)']}
+				style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}
+			/>
 			<View style={styles.headingRow}>
 				<View style={styles.headingCopy}>
 					<Text style={styles.eyebrow}>ANALIZA MIĘŚNIOWA</Text>
-					<Text style={styles.title}>Szacowane serie efektywne</Text>
+					<Text style={styles.title}>Wykonane serie mięśni</Text>
 				</View>
 				<View accessibilityRole="tablist" style={styles.periodToggle}>
 					{(['session', 'week'] as const).map((item) => {
@@ -81,39 +91,44 @@ export function MuscleVolumePanel({
 			</View>
 
 			<Text style={styles.disclaimer}>
-				Przybliżenie z wykonanych serii, nie pomiar wzrostu mięśni. Zakres sesji to orientacyjnie połowa celu tygodniowego.
+				{period === 'session'
+					? 'Tylko bieżący trening. Serie pomocnicze nie są doliczane do celu.'
+					: 'Suma wykonanych serii z bieżącego tygodnia. Serie pomocnicze nie są doliczane do celu.'}
 			</Text>
-			<View style={styles.levelRow}>
-				<Text style={styles.levelLabel}>POZIOM</Text>
-				<View style={styles.levelOptions}>
-					{(Object.keys(levelLabels) as ExperienceLevel[]).map((item) => {
-						const isSelected = level === item;
-						return (
-							<Pressable
-								key={item}
-								accessibilityRole="button"
-								accessibilityState={{ selected: isSelected }}
-								onPress={() => onLevelChange(item)}
-								style={[styles.levelButton, isSelected && styles.periodButtonSelected]}>
-								<Text style={[styles.levelText, isSelected && styles.periodTextSelected]}>{levelLabels[item]}</Text>
-							</Pressable>
-						);
-					})}
-				</View>
-			</View>
-
 			<View style={styles.summaryGrid}>
-				<SummaryItem label="W zakresie" count={inRangeCount} color={statusColors['in-range']} />
-				<SummaryItem label="Poniżej celu" count={belowCount} color={statusColors.below} />
-				<SummaryItem label="Powyżej progu" count={warningCount} color={statusColors.warning} />
-				<SummaryItem label="Bez bodźca" count={noStimulusCount} color={statusColors['no-stimulus']} />
+				{period === 'session' ? (
+					<>
+						<SummaryItem label="Niska objętość" count={belowCount} color={statusColors.below} />
+						<SummaryItem label="W zakresie" count={inRangeCount} color={statusColors['in-range']} />
+						<SummaryItem label="Wysoka objętość" count={warningCount} color={statusColors.warning} />
+						<SummaryItem label="Brak serii głównych" count={noStimulusCount} color={statusColors['no-stimulus']} />
+					</>
+				) : (
+					<>
+						<SummaryItem label="W zakresie" count={inRangeCount} color={statusColors['in-range']} />
+						<SummaryItem label="Poniżej celu" count={belowCount} color={statusColors.below} />
+						<SummaryItem label="Wysoka objętość" count={warningCount} color={statusColors.warning} />
+						<SummaryItem label="Brak serii głównych" count={noStimulusCount} color={statusColors['no-stimulus']} />
+					</>
+				)}
 			</View>
 
 			<View style={styles.legend}>
-				<LegendItem color={statusColors['in-range']} label="W zakresie" />
-				<LegendItem color={statusColors.below} label="Bodziec poniżej celu" />
-				<LegendItem color={statusColors.warning} label="Próg ostrzegawczy" />
-				<LegendItem color={statusColors['no-stimulus']} label="Brak bodźca" />
+				{period === 'session' ? (
+					<>
+						<LegendItem color={statusColors.below} label="Niska objętość sesji" />
+						<LegendItem color={statusColors['in-range']} label="Zakres sesji" />
+						<LegendItem color={statusColors.warning} label="Wysoka objętość sesji" />
+						<LegendItem color={statusColors['no-stimulus']} label="Brak serii głównych" />
+					</>
+				) : (
+					<>
+						<LegendItem color={statusColors['in-range']} label="W zakresie" />
+						<LegendItem color={statusColors.below} label="Poniżej zakresu" />
+						<LegendItem color={statusColors.warning} label="Wysoka objętość" />
+						<LegendItem color={statusColors['no-stimulus']} label="Brak serii głównych" />
+					</>
+				)}
 			</View>
 
 			<MuscleEngagementMap
@@ -136,40 +151,58 @@ export function MuscleVolumePanel({
 							<Text style={[styles.statusText, { color: statusColors[selected.status] }]}>{statusLabels[selected.status]}</Text>
 						</View>
 					</View>
-					<View style={styles.statsRow}>
-						<DetailStat label="EFEKTYWNE" value={formatSets(selected.effectiveSets)} />
-						<DetailStat label="BEZPOŚREDNIE" value={formatSets(selected.directSets)} />
-						<DetailStat label="POŚREDNIE" value={formatSets(selected.indirectSets)} />
+					<View style={styles.setCount}>
+						<CountStat label="SESJA" value={selectedSession?.performedSets ?? 0} />
+						<CountStat label="TYDZIEŃ" value={selectedWeek?.performedSets ?? 0} />
 					</View>
 					<Text style={styles.rangeText}>
-						Minimum {formatSets(selected.range.minimum)} · preferowany zakres {formatSets(selected.range.preferredMin)}–{formatSets(selected.range.preferredMax)} · ostrzeżenie powyżej {formatSets(selected.range.warningAbove)} serii
+						{period === 'session' ? 'Zakres orientacyjny sesji' : 'Zakres orientacyjny tygodnia'}: {formatSets(selected.range.preferredMin)}–{formatSets(selected.range.preferredMax)} serii · wysoka objętość od {formatSets(selected.range.warningFrom)}
 					</Text>
-					<Text style={styles.remainingText}>
-						Do dolnej granicy: {formatSets(Math.max(0, selected.range.minimum - selected.effectiveSets))} serii · {formatSets(selected.lowerGoalProgress)}% realizacji
+					<Text style={[styles.statusExplanation, { color: statusColors[selected.status] }]}>
+						{getStatusExplanation(selected, period)}
 					</Text>
-					{projected && projected.effectiveSets > selected.effectiveSets ? (
-						<Text style={styles.forecastText}>
-							Prognoza po zaplanowanych seriach: {formatSets(projected.effectiveSets)} serii
+					{selected.hasAuxiliaryStimulus ? (
+						<Text style={styles.auxiliaryNote}>
+							Partia uczestniczy też pomocniczo w ćwiczeniach; tych serii nie doliczamy do celu.
 						</Text>
 					) : null}
-
-					{selected.exerciseContributions.length > 0 ? (
-						<View style={styles.contributionList}>
-							{selected.exerciseContributions.map((contribution) => (
-								<View key={contribution.exerciseId} style={styles.contributionRow}>
-									<Text numberOfLines={2} style={styles.exerciseName}>{contribution.exerciseName}</Text>
-									<Text style={styles.contributionValue}>
-										{formatSets(contribution.effectiveSets)} ser. · bezp. {formatSets(contribution.directSets)} / pośr. {formatSets(contribution.indirectSets)}
-									</Text>
-								</View>
-							))}
-						</View>
-					) : (
-						<Text style={styles.noContribution}>Brak ćwiczeń z przypisanym wkładem dla tej partii.</Text>
-					)}
 				</View>
 			) : null}
 			<Text style={styles.referenceNote}>Zakresy orientacyjne. Próg nie jest diagnozą przetrenowania.</Text>
+		</View>
+	);
+}
+
+function getStatusExplanation(muscle: MuscleVolume, period: AnalysisPeriod) {
+	const scope = period === 'session' ? 'w tej sesji' : 'w tym tygodniu';
+	const sets = formatSets(muscle.performedSets);
+	if (period === 'session') {
+		if (muscle.status === 'no-stimulus') {
+			return muscle.hasAuxiliaryStimulus
+				? `0 serii głównych ${scope}; partia była zaangażowana pomocniczo.`
+				: `Brak wykonanych serii przypisanych do tej partii ${scope}.`;
+		}
+		if (muscle.performedSets > 0) {
+			return `${muscle.performedSets === 1 ? '1 seria' : `${sets} serii`} ${scope}. Sama liczba serii nie pozwala ocenić jakości bodźca.`;
+		}
+	}
+	switch (muscle.status) {
+		case 'no-stimulus':
+			return `Brak wykonanych serii przypisanych do tej partii ${scope}.`;
+		case 'below':
+			return `${sets} serii ${scope} — poniżej orientacyjnego zakresu. Kolor nie ocenia jakości bodźca.`;
+		case 'in-range':
+			return `${sets} serii ${scope} — w orientacyjnym zakresie.`;
+		case 'warning':
+			return `${sets} serii ${scope} — wysoka objętość. Oceń kontekst, regenerację i postępy; kolor nie oznacza przetrenowania.`;
+	}
+}
+
+function CountStat({ label, value }: { label: string; value: number }) {
+	return (
+		<View style={styles.countStat}>
+			<Text style={styles.setCountValue}>{value}</Text>
+			<Text style={styles.setCountLabel}>{label}</Text>
 		</View>
 	);
 }
@@ -193,17 +226,17 @@ function LegendItem({ color, label }: { color: string; label: string }) {
 	);
 }
 
-function DetailStat({ label, value }: { label: string; value: string }) {
-	return (
-		<View style={styles.detailStat}>
-			<Text style={styles.detailStatValue}>{value}</Text>
-			<Text style={styles.detailStatLabel}>{label}</Text>
-		</View>
-	);
-}
-
 const styles = StyleSheet.create({
-	card: { marginTop: 18, paddingHorizontal: 16, paddingTop: 17, paddingBottom: 16 },
+	card: {
+		backgroundColor: 'rgba(17, 23, 19, 0.96)',
+		borderColor: 'rgba(222, 243, 225, 0.105)',
+		borderRadius: 24,
+		borderWidth: 1,
+		marginTop: 18,
+		paddingHorizontal: 16,
+		paddingTop: 17,
+		paddingBottom: 16,
+	},
 	headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
 	headingCopy: { flex: 1, minWidth: 0 },
 	eyebrow: { color: '#9BA89C', fontSize: 9, fontWeight: '800', letterSpacing: 1.4 },
@@ -214,18 +247,13 @@ const styles = StyleSheet.create({
 	periodText: { color: '#89958B', fontSize: 11, fontWeight: '700' },
 	periodTextSelected: { color: '#C5FF68' },
 	disclaimer: { color: '#879188', fontSize: 11, lineHeight: 16, marginTop: 7 },
-	levelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 10 },
-	levelLabel: { color: '#879188', fontSize: 8, fontWeight: '800', letterSpacing: 1 },
-	levelOptions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 3 },
-	levelButton: { minHeight: 30, justifyContent: 'center', paddingHorizontal: 7, borderRadius: 9 },
-	levelText: { color: '#89958B', fontSize: 9, fontWeight: '700' },
 	summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 14 },
 	summaryItem: { minWidth: '47%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 11, borderColor: '#28312A', borderWidth: 1, backgroundColor: '#0C110D', paddingHorizontal: 9, paddingVertical: 8 },
 	summaryDot: { width: 7, height: 7, borderRadius: 4 },
 	summaryCount: { color: '#F2F5EF', fontSize: 12, fontWeight: '800' },
 	summaryLabel: { color: '#A6B0A7', fontSize: 10, flexShrink: 1 },
-	legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 7, marginTop: 13 },
-	legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+	legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 6, rowGap: 6, marginTop: 13 },
+	legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, borderWidth: 1, borderColor: '#28312A', backgroundColor: 'rgba(8, 13, 9, 0.8)', paddingHorizontal: 8, paddingVertical: 5 },
 	legendDot: { width: 7, height: 7, borderRadius: 4 },
 	legendText: { color: '#A6B0A7', fontSize: 9 },
 	detail: { borderTopColor: '#29322B', borderTopWidth: 1, paddingTop: 13, marginTop: 7 },
@@ -236,17 +264,12 @@ const styles = StyleSheet.create({
 	statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 6 },
 	statusDot: { width: 6, height: 6, borderRadius: 3 },
 	statusText: { fontSize: 9, fontWeight: '800', flexShrink: 1 },
-	statsRow: { flexDirection: 'row', gap: 7, marginTop: 12 },
-	detailStat: { flex: 1, minWidth: 0, borderRadius: 10, backgroundColor: '#0B100C', paddingHorizontal: 8, paddingVertical: 9 },
-	detailStatValue: { color: '#E8EFE8', fontSize: 15, fontWeight: '800' },
-	detailStatLabel: { color: '#819084', fontSize: 8, fontWeight: '800', marginTop: 4 },
-	rangeText: { color: '#AAB5AA', fontSize: 10, lineHeight: 15, marginTop: 10 },
-	remainingText: { color: '#AAB5AA', fontSize: 10, lineHeight: 15, marginTop: 4 },
-	forecastText: { color: '#C5FF68', fontSize: 10, lineHeight: 15, fontWeight: '700', marginTop: 5 },
-	contributionList: { marginTop: 9 },
-	contributionRow: { borderTopColor: '#242D26', borderTopWidth: 1, paddingVertical: 8 },
-	exerciseName: { color: '#DCE5DC', fontSize: 11, fontWeight: '700' },
-	contributionValue: { color: '#9CA99E', fontSize: 9, marginTop: 3 },
-	noContribution: { color: '#89958C', fontSize: 10, marginTop: 10 },
+	setCount: { flexDirection: 'row', gap: 18, marginTop: 13 },
+	countStat: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+	setCountValue: { color: '#E8EFE8', fontSize: 22, fontWeight: '900', fontVariant: ['tabular-nums'] },
+	setCountLabel: { color: '#AAB5AA', fontSize: 8, fontWeight: '800', letterSpacing: 0.6, flexShrink: 1 },
+	rangeText: { color: '#AAB5AA', fontSize: 10, lineHeight: 15, marginTop: 6 },
+	statusExplanation: { fontSize: 10, lineHeight: 15, marginTop: 6 },
+	auxiliaryNote: { color: '#8FA99A', fontSize: 10, lineHeight: 15, marginTop: 6 },
 	referenceNote: { color: '#758078', fontSize: 9, lineHeight: 14, marginTop: 12 },
 });

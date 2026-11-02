@@ -1,5 +1,5 @@
 import { BlurView } from 'expo-blur';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import { PropsWithChildren, useContext } from 'react';
 import { Platform, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 
@@ -76,8 +76,9 @@ export function GlassPanel({
         elevation: 4,
       };
 
-  const panel = (
-    <View
+  return (
+    <Animated.View
+      entering={FadeInDown.delay(delay).duration(440).reduceMotion(ReduceMotion.System)}
       className={`relative overflow-hidden border ${className}`}
       style={[
         {
@@ -103,10 +104,6 @@ export function GlassPanel({
       <View className={`relative z-10 ${contentClassName ?? ''}`} style={[{ position: 'relative', zIndex: 1 }, contentStyle]}>
         {children}
       </View>
-    </View>
+    </Animated.View>
   );
-
-  if (Platform.OS === 'web') return panel;
-
-  return <Animated.View entering={FadeInDown.delay(delay).duration(440)}>{panel}</Animated.View>;
 }

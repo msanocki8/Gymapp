@@ -7,15 +7,18 @@ import { GlassScreen } from '@/components/glass-screen';
 import { NeonText } from '@/components/neon-text';
 import { useAuth } from '@/hooks/use-auth';
 import { useGymApp } from '@/hooks/use-gym-app';
+import { countWorkoutsThisWeek, MAX_WEEKLY_WORKOUT_GOAL, MIN_WEEKLY_WORKOUT_GOAL } from '@/lib/workout-goal';
 
 export default function AccountScreen() {
-  const { userName, setUserName } = useGymApp();
-  const { signOut } = useAuth();
+  const { userName, setUserName, sessions } = useGymApp();
+  const { signOut, weeklyWorkoutGoal, setWeeklyWorkoutGoal } = useAuth();
   const [nickDraft, setNickDraft] = useState(userName);
   const [remindersEnabled, setRemindersEnabled] = useState(true);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [savingNick, setSavingNick] = useState(false);
+  const [savingGoal, setSavingGoal] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const completedThisWeek = Math.min(countWorkoutsThisWeek(sessions), weeklyWorkoutGoal);
 
   async function saveNick() {
     const nextNick = nickDraft.trim();
@@ -44,9 +47,25 @@ export default function AccountScreen() {
     }
   }
 
+  async function saveWeeklyGoal(goal: number) {
+    if (goal === weeklyWorkoutGoal || savingGoal) return;
+    setAccountError(null);
+    setSavingGoal(true);
+    try {
+      await setWeeklyWorkoutGoal(goal);
+    } catch (error) {
+      setAccountError(error instanceof Error ? error.message : 'Nie udało się zapisać celu treningowego.');
+    } finally {
+      setSavingGoal(false);
+    }
+  }
+
   return (
     <GlassScreen edges={['top']}>
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}>
         <View className="mx-auto w-full max-w-[560px] px-5 pb-10 pt-6">
           <Text className="text-[10px] font-bold tracking-[2px] text-neon">TWOJE MIEJSCE</Text>
           <Text className="mb-6 mt-2 text-[32px] font-black tracking-tight text-white">Konto</Text>
@@ -124,15 +143,44 @@ export default function AccountScreen() {
             <View className="flex-row items-center justify-between">
               <View>
                 <NeonText color="#83F3C0" className="text-[10px] font-extrabold tracking-[1.5px]">TWÓJ CEL</NeonText>
-                <Text className="mt-2 text-base font-extrabold text-white">3 treningi w tygodniu</Text>
+                <Text className="mt-2 text-base font-extrabold text-white">{weeklyWorkoutGoal} razy w tygodniu</Text>
               </View>
               <View className="h-11 w-11 items-center justify-center rounded-2xl bg-mint/10">
                 <SymbolView name={{ ios: 'scope', android: 'my_location', web: 'my_location' }} size={22} tintColor="#83F3C0" />
               </View>
             </View>
-            <Text className="mt-3 text-xs leading-5 text-white/55">Małe kroki, które z czasem robią wielką różnicę.</Text>
+            <Text className="mt-3 text-xs leading-5 text-white/55">Wybierz, ile razy chcesz trenować w tygodniu.</Text>
+            <View accessibilityRole="radiogroup" className="mt-4 flex-row justify-between gap-1">
+              {Array.from(
+                { length: MAX_WEEKLY_WORKOUT_GOAL - MIN_WEEKLY_WORKOUT_GOAL + 1 },
+                (_, index) => MIN_WEEKLY_WORKOUT_GOAL + index,
+              ).map((goal) => {
+                const selected = weeklyWorkoutGoal === goal;
+                const workoutForm = goal === 1 ? 'trening' : goal <= 4 ? 'treningi' : 'treningów';
+                return (
+                  <Pressable
+                    key={goal}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`Cel: ${goal} ${workoutForm} w tygodniu`}
+                    accessibilityState={{ checked: selected, disabled: savingGoal }}
+                    disabled={savingGoal}
+                    onPress={() => { void saveWeeklyGoal(goal); }}
+                    className={`h-9 min-w-9 flex-1 items-center justify-center rounded-xl border ${
+                      selected ? 'border-mint/70 bg-mint/20' : 'border-white/10 bg-white/[0.04]'
+                    }`}>
+                    <Text className={`text-sm font-extrabold ${selected ? 'text-mint' : 'text-white/65'}`}>{goal}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text className="mt-3 text-[11px] font-semibold text-white/45">
+              {savingGoal ? 'Zapisywanie celu…' : `${completedThisWeek} / ${weeklyWorkoutGoal} w tym tygodniu`}
+            </Text>
             <View className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
-              <View className="h-full w-2/3 rounded-full bg-mint" />
+              <View
+                className="h-full rounded-full bg-mint"
+                style={{ width: `${(completedThisWeek / weeklyWorkoutGoal) * 100}%` }}
+              />
             </View>
           </GlassPanel>
           <Pressable

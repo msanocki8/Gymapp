@@ -1,111 +1,38 @@
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useState } from 'react';
+import { SymbolView } from 'expo-symbols';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AppBottomBar } from '@/components/app-bottom-bar';
 import { WorkoutPlan, useGymApp } from '@/hooks/use-gym-app';
+import { useAuth } from '@/hooks/use-auth';
+import { countWorkoutsThisWeek } from '@/lib/workout-goal';
+import { PlanCarousel } from '@/components/plan-carousel';
 import {
   WorkoutCard,
-  WorkoutHeader,
   WorkoutScreen,
   workoutColors,
   workoutStyles,
 } from '@/components/workout-ui';
 
-function PlanCard({
-  plan,
-  index,
-  wide,
-  onDelete,
-  deleting,
-}: {
-  plan: WorkoutPlan;
-  index: number;
-  wide: boolean;
-  onDelete: (plan: WorkoutPlan) => void;
-  deleting: boolean;
-}) {
-  const router = useRouter();
-  const exerciseCountForm = plan.exercises.length === 1
-    ? 'ćwiczenie'
-    : plan.exercises.length >= 2 && plan.exercises.length <= 4
-      ? 'ćwiczenia'
-      : 'ćwiczeń';
-
-  return (
-    <WorkoutCard className="w-full min-w-0 overflow-hidden" style={[styles.planCard, wide && styles.planCardWide]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Rozpocznij plan ${plan.name}`}
-        onPress={() => router.push({ pathname: '/workout-session', params: { planId: plan.id } })}
-        className="w-full min-w-0 active:opacity-80"
-        style={styles.planButton}>
-        <View className="w-full min-w-0 flex-row items-center" style={styles.planTopRow}>
-          <View className="shrink-0" style={styles.planIcon}>
-            <Text style={styles.planIconText} maxFontSizeMultiplier={1.1}>
-              {`${index + 1}`.padStart(2, '0')}
-            </Text>
-          </View>
-          <View className="min-w-0 flex-1 shrink overflow-hidden" style={styles.planCopy}>
-            <Text className="w-full shrink" style={styles.planName} numberOfLines={1} ellipsizeMode="tail" maxFontSizeMultiplier={1.15}>
-              {plan.name}
-            </Text>
-            <Text className="w-full shrink" style={styles.planFocus} numberOfLines={1} ellipsizeMode="tail" maxFontSizeMultiplier={1.15}>
-              {plan.focus}
-            </Text>
-          </View>
-          <View className="shrink-0" style={styles.planArrow}>
-            <Text style={styles.planArrowText}>›</Text>
-          </View>
-        </View>
-      </Pressable>
-      <View className="w-full min-w-0 flex-row items-center" style={styles.planFooter}>
-        <Text className="min-w-0 flex-1 shrink" style={styles.planExerciseCount} numberOfLines={1} ellipsizeMode="tail" maxFontSizeMultiplier={1.1}>
-          {plan.exercises.length} {exerciseCountForm}
-        </Text>
-        <Text className="shrink-0" style={styles.planDuration} numberOfLines={1} maxFontSizeMultiplier={1.1}>
-          {plan.duration} min
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Edytuj plan ${plan.name}`}
-          onPress={() => router.push({ pathname: '/create-workout', params: { planId: plan.id } })}
-          className="shrink-0 rounded-xl border border-zinc-700 bg-zinc-900 active:opacity-70"
-          style={styles.editPlanButton}>
-          <Text style={styles.editPlanText}>EDYTUJ</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Usuń plan ${plan.name}`}
-          accessibilityState={{ disabled: deleting }}
-          disabled={deleting}
-          onPress={() => onDelete(plan)}
-          className="shrink-0 rounded-xl border border-red-400/30 bg-red-950/30 active:opacity-70"
-          style={styles.deletePlanButton}>
-          {deleting ? (
-            <ActivityIndicator color="#FCA5A5" size="small" />
-          ) : (
-            <Text style={styles.deletePlanText}>USUŃ</Text>
-          )}
-        </Pressable>
-      </View>
-    </WorkoutCard>
-  );
-}
-
 export function WorkoutFlow() {
   const router = useRouter();
-  const { plans, plansLoading, plansError, reloadPlans, deletePlan } = useGymApp();
+  const {
+    plans,
+    plansLoading,
+    plansError,
+    reloadPlans,
+    deletePlan,
+    sessions,
+    sessionsLoading,
+    sessionsError,
+  } = useGymApp();
+  const { weeklyWorkoutGoal } = useAuth();
+  const insets = useSafeAreaInsets();
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const { width } = useWindowDimensions();
-  const isWideScreen = width >= 760;
-  const lastTwoDigits = plans.length % 100;
-  const lastDigit = plans.length % 10;
-  const planCountForm = plans.length === 1
-    ? 'PLAN'
-    : lastDigit >= 2 && lastDigit <= 4 && (lastTwoDigits < 12 || lastTwoDigits > 14)
-      ? 'PLANY'
-      : 'PLANÓW';
   const confirmDeletePlan = (plan: WorkoutPlan) => {
     const message = `Czy na pewno chcesz usunąć plan „${plan.name}”?`;
     const onConfirm = () => {
@@ -127,69 +54,118 @@ export function WorkoutFlow() {
       { text: 'Usuń', style: 'destructive', onPress: onConfirm },
     ]);
   };
+  const returnToTraining = () => {
+    router.replace('/(tabs)/training');
+  };
+  const today = new Date();
+  const startOfWeek = new Date(today);
+  startOfWeek.setHours(0, 0, 0, 0);
+  startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(endOfWeek.getDate() + 7);
+  const sessionsThisWeek = sessions.filter((session) =>
+    session.completedAt >= startOfWeek.getTime() && session.completedAt < endOfWeek.getTime());
+  const completedThisWeek = Math.min(countWorkoutsThisWeek(sessions), weeklyWorkoutGoal);
+  const weekDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(startOfWeek);
+    date.setDate(startOfWeek.getDate() + index);
+    const nextDate = new Date(date);
+    nextDate.setDate(date.getDate() + 1);
+    return {
+      label: ['P', 'W', 'Ś', 'C', 'P', 'S', 'N'][index],
+      isToday: date.toDateString() === today.toDateString(),
+      hasWorkout: sessionsThisWeek.some((session) =>
+        session.completedAt >= date.getTime() && session.completedAt < nextDate.getTime()),
+    };
+  });
 
   return (
-    <WorkoutScreen maxWidth={820}>
-      <WorkoutHeader eyebrow="PLAN TRENINGOWY" onBack={() => router.back()} />
-      <ScrollView
-        style={workoutStyles.page}
-        contentContainerStyle={[workoutStyles.scrollContent, styles.pageContent]}
-        showsVerticalScrollIndicator={false}>
-        <View className="w-full min-w-0 self-center" style={styles.intro}>
-          <View style={[styles.eyebrow, !isWideScreen && styles.centered]}>
-            <View style={styles.eyebrowDot} />
-            <Text style={workoutStyles.sectionLabel} maxFontSizeMultiplier={1.1}>
-              TWÓJ RYTM. TWOJE ZASADY.
-            </Text>
+    <WorkoutScreen maxWidth={820} edges={['top']}>
+      <View style={styles.screenContent}>
+        <ScrollView
+          style={workoutStyles.page}
+          contentContainerStyle={styles.pageContent}
+          showsVerticalScrollIndicator={false}>
+          <View className="w-full min-w-0 self-center" style={styles.page}>
+          <View style={styles.pageHeader}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Wróć do treningów"
+              onPress={returnToTraining}
+              style={({ pressed }) => [styles.headerIconButton, pressed && styles.pressed]}>
+              <SymbolView name={{ ios: 'arrow.left', android: 'arrow_back', web: 'arrow_back' }} size={17} tintColor={workoutColors.mint} />
+            </Pressable>
+            <View style={styles.pageHeaderCopy}>
+              <Text style={styles.pageEyebrow}>CZAS NA RUCH</Text>
+              <Text style={styles.pageTitle}>Wybierz trening</Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Ustawienia konta"
+              onPress={() => router.push('/(tabs)/account')}
+              style={({ pressed }) => [styles.headerIconButton, pressed && styles.pressed]}>
+              <SymbolView name={{ ios: 'gearshape.fill', android: 'settings', web: 'settings' }} size={17} tintColor={workoutColors.mint} />
+            </Pressable>
           </View>
-          <Text
-            className="w-full min-w-0 shrink"
-            style={[workoutStyles.title, styles.title, !isWideScreen && styles.centeredText]}
-            numberOfLines={3}
-            ellipsizeMode="tail"
-            maxFontSizeMultiplier={1.15}>
-            Wybierz swój{'\n'}trening <Text style={styles.titleAccent}>na dziś.</Text>
-          </Text>
-          <Text
-            className="w-full min-w-0 shrink"
-            style={[workoutStyles.subtitle, styles.introSubtitle, !isWideScreen && styles.centeredText]}
-            numberOfLines={3}
-            ellipsizeMode="tail"
-            maxFontSizeMultiplier={1.15}>
-            Gotowy plan albo własna rozpiska — zaczynasz wtedy, kiedy chcesz.
-          </Text>
-        </View>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push('/create-workout')}
-          className="w-full min-w-0 self-center overflow-hidden"
-          style={({ pressed }) => [styles.createCard, pressed && styles.pressed]}>
-          <View className="w-full min-w-0 flex-row items-center" style={styles.createContent}>
-            <View className="shrink-0" style={styles.createIcon}>
+          <View style={styles.weekCard}>
+            <View style={styles.weekSummary}>
+              <Text style={styles.weekLabel}>TYDZIEŃ</Text>
+              <Text style={styles.weekCount}>
+                {sessionsLoading ? '…' : completedThisWeek}
+                <Text style={styles.weekTotal}>
+                  {' '}z {weeklyWorkoutGoal} {weeklyWorkoutGoal === 1 ? 'treningu' : 'treningów'}
+                </Text>
+              </Text>
+            </View>
+            <View style={styles.weekDays}>
+              {weekDays.map((day, index) => (
+                <View key={`${day.label}-${index}`} style={styles.weekDay}>
+                  <Text style={styles.weekDayLabel}>{day.label}</Text>
+                  <View
+                    accessibilityLabel={`${day.label}${day.isToday ? ', dzisiaj' : ''}${day.hasWorkout ? ', trening ukończony' : ''}`}
+                    style={[
+                      styles.weekDayDot,
+                      day.hasWorkout && !day.isToday && styles.weekDayCompleted,
+                      day.isToday && styles.weekDayToday,
+                    ]}
+                  />
+                </View>
+              ))}
+            </View>
+            {sessionsError ? (
+              <Text accessibilityRole="alert" style={styles.weekError}>
+                Nie udało się pobrać postępów treningowych.
+              </Text>
+            ) : null}
+          </View>
+
+          {plans.length > 0 && !plansLoading && !plansError ? (
+            <TodayPlanCard
+              plan={plans[0]}
+              onPress={() => router.push({
+                pathname: '/workout-session',
+                params: { planId: plans[0].id },
+              })}
+            />
+          ) : null}
+
+        {plans.length === 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Stwórz własny plan"
+            onPress={() => router.push('/create-workout')}
+            style={({ pressed }) => [styles.createCard, pressed && styles.pressed]}>
+            <View style={styles.createIcon}>
               <Text style={styles.createIconText}>+</Text>
             </View>
-            <View className="min-w-0 flex-1 shrink overflow-hidden" style={styles.createCopy}>
-              <Text className="w-full shrink" style={styles.createTitle} numberOfLines={1} ellipsizeMode="tail" maxFontSizeMultiplier={1.15}>
-                Stwórz własny plan
-              </Text>
-              <Text className="w-full min-w-0 shrink" style={styles.createSubtitle} numberOfLines={2} ellipsizeMode="tail" maxFontSizeMultiplier={1.15}>
-                Dodaj nazwę i ćwiczenia
-              </Text>
+            <View style={styles.createCopy}>
+              <Text style={styles.createTitle}>Stwórz własny plan</Text>
+              <Text style={styles.createSubtitle}>Dodaj nazwę i ćwiczenia</Text>
             </View>
-            <Text className="shrink-0" style={styles.createArrow}>›</Text>
-          </View>
-        </Pressable>
-
-        <View className="w-full min-w-0 self-center flex-row" style={[styles.sectionHeading, !isWideScreen && styles.sectionHeadingMobile]}>
-          <View className="min-w-0 flex-1 shrink">
-            <Text style={styles.sectionKicker}>ZACZNIJ OD GOTOWEGO</Text>
-            <Text className="w-full shrink" style={styles.sectionTitle} numberOfLines={2} ellipsizeMode="tail" maxFontSizeMultiplier={1.15}>Plany treningowe</Text>
-          </View>
-          <View className="shrink-0" style={styles.planCountBadge}>
-            <Text style={styles.planCount}>{plans.length} {planCountForm}</Text>
-          </View>
-        </View>
+            <Text style={styles.createArrow}>›</Text>
+          </Pressable>
+        ) : null}
 
         {plansLoading ? (
           <View className="mb-4 flex-row items-center justify-center gap-2">
@@ -211,108 +187,336 @@ export function WorkoutFlow() {
           <Text accessibilityRole="alert" className="mb-4 text-xs leading-5 text-red-200">{deleteError}</Text>
         ) : null}
 
-        {plans.length > 0 ? (
-          <View className="w-full min-w-0 items-center" style={[styles.planList, isWideScreen && styles.planListWide]}>
-            {plans.map((plan, index) => (
-              <PlanCard
-                key={plan.id}
-                plan={plan}
-                index={index}
-                wide={isWideScreen}
+            {plans.length > 0 ? (
+              <PlanCarousel
+                plans={plans}
+                onEdit={(plan) => router.push({ pathname: '/create-workout', params: { planId: plan.id } })}
                 onDelete={confirmDeletePlan}
-                deleting={deletingPlanId === plan.id}
+                deletingPlanId={deletingPlanId}
               />
-            ))}
+            ) : (
+              <WorkoutCard style={styles.emptyCard}>
+                <Text className="w-full min-w-0 shrink" style={styles.emptyTitle} numberOfLines={2} ellipsizeMode="tail">Nie masz jeszcze planu</Text>
+                <Text className="w-full min-w-0 shrink" style={styles.emptyText}>
+                  Utwórz własną rozpiskę i pojawi się tutaj.
+                </Text>
+              </WorkoutCard>
+            )}
           </View>
-        ) : (
-          <WorkoutCard style={styles.emptyCard}>
-            <Text className="w-full min-w-0 shrink" style={styles.emptyTitle} numberOfLines={2} ellipsizeMode="tail">Nie masz jeszcze planu</Text>
-            <Text className="w-full min-w-0 shrink" style={styles.emptyText}>
-              Utwórz własną rozpiskę i pojawi się tutaj.
-            </Text>
-          </WorkoutCard>
-        )}
-      </ScrollView>
+        </ScrollView>
+        <AppBottomBar
+          activeTab="training"
+          bottomInset={insets.bottom}
+          onNavigate={(tab) => {
+            if (tab === 'training') returnToTraining();
+            if (tab === 'history') router.replace('/(tabs)/history');
+            if (tab === 'account') router.replace('/(tabs)/account');
+          }}
+        />
+      </View>
     </WorkoutScreen>
   );
 }
 
+function TodayPlanCard({ plan, onPress }: { plan: WorkoutPlan; onPress: () => void }) {
+  const exercises = plan.exerciseConfigs?.length
+    ? plan.exerciseConfigs.slice(0, 2).map((exercise) => ({
+        name: exercise.name,
+        details: exercise.sets.length
+          ? `${exercise.sets.length} × ${exercise.sets[0]?.reps || '—'}`
+          : null,
+      }))
+    : plan.exercises.slice(0, 2).map((name) => ({ name, details: null }));
+  const remainingCount = Math.max(0, plan.exercises.length - exercises.length);
+
+  return (
+    <View style={styles.todayCard}>
+      <View style={styles.todayHeader}>
+        <View style={styles.todayBadge}>
+          <View style={styles.todayBadgeDot} />
+          <Text style={styles.todayBadgeText}>NA DZIŚ</Text>
+        </View>
+        <Text style={styles.todayMeta}>{plan.duration} min · {plan.exercises.length} ćwiczeń</Text>
+      </View>
+      <Text numberOfLines={2} style={styles.todayTitle}>{plan.name}</Text>
+      <View style={styles.todayDivider} />
+      <View style={styles.todayExercises}>
+        {[0, 1].map((index) => {
+          const exercise = exercises[index];
+          return (
+            <View key={exercise?.name ?? `today-empty-${index}`} style={styles.todayExerciseRow}>
+              <Text numberOfLines={1} style={styles.todayExerciseName}>{exercise?.name ?? ''}</Text>
+              <Text numberOfLines={1} style={styles.todayExerciseDetails}>{exercise?.details ?? ''}</Text>
+            </View>
+          );
+        })}
+      </View>
+      {remainingCount > 0 ? (
+        <Text style={styles.todayRemaining}>+ {remainingCount} kolejnych</Text>
+      ) : null}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Rozpocznij trening: ${plan.name}`}
+        onPress={onPress}
+        style={({ pressed }) => [styles.todayStartPressable, pressed && styles.pressed]}>
+        <LinearGradient
+          colors={['#22c55e', '#a3e635']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.todayStartButton}>
+          <SymbolView name={{ ios: 'play.fill', android: 'play_arrow', web: 'play_arrow' }} size={16} tintColor="#04210f" />
+          <Text style={styles.todayStartText}>Rozpocznij trening</Text>
+        </LinearGradient>
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  pageContent: {
-    maxWidth: 820,
-    paddingHorizontal: 27,
-    paddingTop: 22,
-    paddingBottom: 36,
+  screenContent: {
+    flex: 1,
   },
-  intro: {
+  pageContent: {
+    flexGrow: 1,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+  },
+  page: {
     alignSelf: 'center',
-    marginBottom: 25,
-    maxWidth: 560,
+    gap: 14,
+    maxWidth: 760,
     width: '100%',
   },
-  centered: {
-    justifyContent: 'center',
-  },
-  centeredText: {
-    textAlign: 'center',
-  },
-  eyebrow: {
+  pageHeader: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 9,
+    gap: 11,
+    minHeight: 50,
   },
-  eyebrowDot: {
-    backgroundColor: workoutColors.neon,
-    borderRadius: 5,
-    height: 7,
-    width: 7,
+  pageHeaderCopy: {
+    flex: 1,
+    minWidth: 0,
   },
-  title: {
-    fontSize: 32,
-    lineHeight: 46,
-    marginTop: 15,
-    maxWidth: 560,
+  pageEyebrow: {
+    color: '#bef264',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    marginBottom: 3,
   },
-  titleAccent: {
+  pageTitle: {
+    color: workoutColors.text,
+    fontSize: 21,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  headerIconButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderColor: 'rgba(34, 197, 94, 0.28)',
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  weekCard: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 20,
+    borderWidth: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+    minHeight: 64,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  weekSummary: {
+    gap: 4,
+    minWidth: 58,
+  },
+  weekLabel: {
+    color: '#9ca3af',
+    fontSize: 8,
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
+  weekCount: {
     color: workoutColors.neon,
+    fontSize: 19,
+    fontWeight: '800',
   },
-  introSubtitle: {
-    lineHeight: 23,
-    marginTop: 12,
-    maxWidth: 440,
+  weekTotal: {
+    color: workoutColors.muted,
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  weekDays: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minWidth: 0,
+  },
+  weekDay: {
+    alignItems: 'center',
+    gap: 5,
+  },
+  weekDayLabel: {
+    color: '#a1a1aa',
+    fontSize: 8,
+    fontWeight: '600',
+  },
+  weekDayDot: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'transparent',
+    borderRadius: 11,
+    borderWidth: 1,
+    height: 22,
+    width: 22,
+  },
+  weekDayCompleted: {
+    backgroundColor: 'rgba(34,197,94,0.72)',
+  },
+  weekDayToday: {
+    backgroundColor: 'rgba(34,197,94,0.08)',
+    borderColor: workoutColors.neon,
+  },
+  weekError: {
+    color: '#fca5a5',
+    flexBasis: '100%',
+    fontSize: 10,
+    lineHeight: 15,
+  },
+  todayCard: {
+    backgroundColor: 'rgba(17,23,19,0.94)',
+    borderColor: 'rgba(34,197,94,0.62)',
+    borderRadius: 23,
+    borderWidth: 1,
+    gap: 8,
+    padding: 15,
+    width: '100%',
+  },
+  todayHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: 25,
+  },
+  todayBadge: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(34,197,94,0.1)',
+    borderColor: 'rgba(34,197,94,0.34)',
+    borderRadius: 99,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  todayBadgeDot: {
+    borderColor: workoutColors.mint,
+    borderRadius: 3,
+    borderWidth: 1,
+    height: 6,
+    width: 6,
+  },
+  todayBadgeText: {
+    color: workoutColors.mint,
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
+  todayMeta: {
+    color: workoutColors.muted,
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  todayTitle: {
+    color: workoutColors.text,
+    fontSize: 21,
+    fontWeight: '800',
+    lineHeight: 27,
+  },
+  todayDivider: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    height: StyleSheet.hairlineWidth,
+    width: '100%',
+  },
+  todayExercises: {
+    gap: 3,
+  },
+  todayExerciseRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'space-between',
+    minHeight: 19,
+  },
+  todayExerciseName: {
+    color: workoutColors.text,
+    flex: 1,
+    fontSize: 11,
+    minWidth: 0,
+  },
+  todayExerciseDetails: {
+    color: workoutColors.muted,
+    flexShrink: 0,
+    fontSize: 10,
+  },
+  todayRemaining: {
+    color: workoutColors.mint,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  todayStartPressable: {
+    borderRadius: 14,
+    marginTop: 1,
+    overflow: 'hidden',
+  },
+  todayStartButton: {
+    alignItems: 'center',
+    borderRadius: 14,
+    flexDirection: 'row',
+    gap: 8,
+    height: 46,
+    justifyContent: 'center',
+  },
+  todayStartText: {
+    color: '#04210f',
+    fontSize: 14,
+    fontWeight: '800',
   },
   createCard: {
-    alignItems: 'stretch',
+    alignItems: 'center',
     alignSelf: 'center',
     backgroundColor: 'rgba(34, 197, 94, 0.07)',
     borderColor: 'rgba(34, 197, 94, 0.26)',
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 1,
-    minHeight: 104,
-    maxWidth: 560,
-    paddingHorizontal: 17,
-    paddingVertical: 16,
-    width: '100%',
-  },
-  createContent: {
-    alignItems: 'center',
     flexDirection: 'row',
-    minHeight: 70,
+    minHeight: 82,
+    maxWidth: 560,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
     width: '100%',
   },
   createIcon: {
     alignItems: 'center',
     backgroundColor: workoutColors.neon,
-    borderRadius: 16,
-    height: 46,
+    borderRadius: 14,
+    height: 42,
     justifyContent: 'center',
-    width: 46,
+    width: 42,
   },
   createIconText: {
     color: workoutColors.background,
-    fontSize: 27,
+    fontSize: 25,
     fontWeight: '500',
-    lineHeight: 34,
+    lineHeight: 32,
     marginTop: -3,
   },
   createCopy: {
@@ -327,200 +531,16 @@ const styles = StyleSheet.create({
   },
   createSubtitle: {
     color: workoutColors.muted,
-    fontSize: 13,
-    marginTop: 7,
-    lineHeight: 18,
+    fontSize: 11,
+    marginTop: 4,
+    lineHeight: 15,
   },
   createArrow: {
     color: workoutColors.neon,
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 28,
+    lineHeight: 32,
     marginLeft: 8,
     paddingHorizontal: 2,
-  },
-  sectionHeading: {
-    alignItems: 'flex-end',
-    alignSelf: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    marginTop: 30,
-    maxWidth: 560,
-    width: '100%',
-  },
-  sectionHeadingMobile: {
-    alignItems: 'center',
-  },
-  sectionKicker: {
-    color: workoutColors.neon,
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 1.5,
-    marginBottom: 5,
-  },
-  sectionTitle: {
-    color: workoutColors.text,
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  planCountBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.045)',
-    borderColor: workoutColors.border,
-    borderRadius: 99,
-    borderWidth: 1,
-    marginBottom: 2,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  planCount: {
-    color: workoutColors.muted,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.1,
-  },
-  planList: {
-    alignItems: 'center',
-    gap: 12,
-    width: '100%',
-  },
-  planListWide: {
-    alignItems: 'stretch',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  planCard: {
-    alignSelf: 'center',
-    maxWidth: 560,
-    padding: 0,
-    width: '100%',
-  },
-  planCardWide: {
-    alignSelf: 'auto',
-    flexBasis: 330,
-    flexGrow: 1,
-    flexShrink: 1,
-    maxWidth: 390,
-  },
-  planButton: {
-    alignItems: 'stretch',
-    alignSelf: 'stretch',
-    flexDirection: 'column',
-    minHeight: 76,
-    paddingHorizontal: 16,
-    paddingTop: 15,
-    paddingBottom: 10,
-    width: '100%',
-  },
-  planContent: {
-    alignSelf: 'stretch',
-    flexDirection: 'column',
-    width: '100%',
-  },
-  planTopRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    minHeight: 50,
-    width: '100%',
-  },
-  planIcon: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(34, 197, 94, 0.12)',
-    borderColor: 'rgba(34, 197, 94, 0.14)',
-    borderRadius: 16,
-    borderWidth: 1,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  planIconText: {
-    color: workoutColors.neon,
-    fontSize: 12,
-    fontVariant: ['tabular-nums'],
-    fontWeight: '900',
-    letterSpacing: 0.4,
-  },
-  planCopy: {
-    flex: 1,
-    marginHorizontal: 11,
-    minWidth: 0,
-  },
-  planName: {
-    color: workoutColors.text,
-    fontSize: 16,
-    fontWeight: '800',
-    flexShrink: 1,
-  },
-  planFocus: {
-    color: workoutColors.muted,
-    fontSize: 12,
-    flexShrink: 1,
-    marginTop: 6,
-  },
-  planFooter: {
-    alignItems: 'center',
-    borderTopColor: 'rgba(237, 247, 239, 0.07)',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    gap: 12,
-    minHeight: 46,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    width: '100%',
-  },
-  editPlanButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 31,
-    paddingHorizontal: 10,
-  },
-  editPlanText: {
-    color: '#AAB4A8',
-    fontSize: 8,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-  },
-  deletePlanButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 31,
-    minWidth: 48,
-    paddingHorizontal: 9,
-  },
-  deletePlanText: {
-    color: '#FCA5A5',
-    fontSize: 8,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-  },
-  planExerciseCount: {
-    color: workoutColors.muted,
-    fontSize: 12,
-    fontWeight: '600',
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  planDuration: {
-    color: workoutColors.neon,
-    fontSize: 12,
-    fontVariant: ['tabular-nums'],
-    fontWeight: '800',
-    marginLeft: 'auto',
-  },
-  planArrow: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    borderRadius: 10,
-    height: 30,
-    justifyContent: 'center',
-    marginTop: 8,
-    width: 30,
-  },
-  planArrowText: {
-    color: workoutColors.neon,
-    fontSize: 23,
-    lineHeight: 27,
-    marginTop: -2,
   },
   emptyCard: {
     marginTop: 2,

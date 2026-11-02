@@ -10,6 +10,12 @@ import {
 import type { Session, User } from '@supabase/supabase-js';
 
 import { requireSupabase, supabaseConfigured } from '@/lib/supabase';
+import {
+  DEFAULT_WEEKLY_WORKOUT_GOAL,
+  isValidWeeklyWorkoutGoal,
+  MAX_WEEKLY_WORKOUT_GOAL,
+  MIN_WEEKLY_WORKOUT_GOAL,
+} from '@/lib/workout-goal';
 
 type AuthContextValue = {
   session: Session | null;
@@ -17,10 +23,12 @@ type AuthContextValue = {
   isLoading: boolean;
   configurationError: string | null;
   sessionError: string | null;
+  weeklyWorkoutGoal: number;
   signIn: (nick: string, password: string) => Promise<void>;
   signUp: (nick: string, password: string, accessKey: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateNick: (nick: string) => Promise<void>;
+  setWeeklyWorkoutGoal: (goal: number) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -107,6 +115,29 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (error) throw new Error(`Nie udało się wylogować: ${error.message}`);
   }, []);
 
+  const weeklyWorkoutGoal = isValidWeeklyWorkoutGoal(session?.user.user_metadata.weekly_workout_goal)
+    ? session.user.user_metadata.weekly_workout_goal
+    : DEFAULT_WEEKLY_WORKOUT_GOAL;
+
+  const setWeeklyWorkoutGoal = useCallback(async (goal: number) => {
+    if (!isValidWeeklyWorkoutGoal(goal)) {
+      throw new Error(`Cel treningowy musi wynosić od ${MIN_WEEKLY_WORKOUT_GOAL} do ${MAX_WEEKLY_WORKOUT_GOAL} treningów tygodniowo.`);
+    }
+
+    const currentUserId = session?.user.id;
+    if (!currentUserId) throw new Error('Zaloguj się, aby zapisać cel treningowy.');
+
+    const { data, error } = await requireSupabase().auth.updateUser({
+      data: { weekly_workout_goal: goal },
+    });
+    if (error) throw new Error(`Nie udało się zapisać celu treningowego: ${error.message}`);
+    if (!data.user) throw new Error('Nie udało się odczytać zaktualizowanego celu treningowego.');
+
+    setSession((current) => current?.user.id === currentUserId
+      ? { ...current, user: data.user }
+      : current);
+  }, [session?.user.id]);
+
   const updateNick = useCallback(async (nick: string) => {
     if (!isValidNick(nick)) {
       throw new Error('Nick musi mieć od 3 do 24 znaków: litery bez polskich znaków, cyfry, „_” lub „-”.');
@@ -134,11 +165,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
     isLoading,
     configurationError,
     sessionError,
+    weeklyWorkoutGoal,
     signIn,
     signUp,
     signOut,
     updateNick,
-  }), [session, isLoading, configurationError, sessionError, signIn, signUp, signOut, updateNick]);
+    setWeeklyWorkoutGoal,
+  }), [session, isLoading, configurationError, sessionError, weeklyWorkoutGoal, signIn, signUp, signOut, updateNick, setWeeklyWorkoutGoal]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

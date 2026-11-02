@@ -9,12 +9,14 @@ import {
   Text,
   View,
 } from 'react-native';
-import type { ViewStyle } from 'react-native';
+import type { ScrollViewInstance, ViewStyle } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { GlassPanel } from '@/components/glass-panel';
 import { GlassScreen } from '@/components/glass-screen';
 import { useGymApp } from '@/hooks/use-gym-app';
 import type { WorkoutPlan } from '@/hooks/use-gym-app';
+import { useAuth } from '@/hooks/use-auth';
+import { countWorkoutsThisWeek } from '@/lib/workout-goal';
 
 type CrossPlatformShadowStyle = ViewStyle & { boxShadow?: string };
 
@@ -127,7 +129,7 @@ function WorkoutPlanCard({
 
 export default function TrainingHomeScreen() {
   const router = useRouter();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const {
     userName,
     plans,
@@ -139,15 +141,8 @@ export default function TrainingHomeScreen() {
     sessionsError,
     reloadSessions,
   } = useGymApp();
-  const completedThisWeek = (() => {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-    const end = new Date(start);
-    end.setDate(end.getDate() + 7);
-    return sessions.filter((session) => session.completedAt >= start.getTime() && session.completedAt < end.getTime()).length;
-  })();
-  const completedWorkouts = Math.min(completedThisWeek, 3);
+  const { weeklyWorkoutGoal } = useAuth();
+  const completedWorkouts = Math.min(countWorkoutsThisWeek(sessions), weeklyWorkoutGoal);
 
   useFocusEffect(
     useCallback(() => {
@@ -166,7 +161,7 @@ export default function TrainingHomeScreen() {
           flexGrow: 1,
           paddingHorizontal: 16,
           paddingTop: 16,
-          paddingBottom: 120,
+          paddingBottom: 32,
         }}
         showsVerticalScrollIndicator={false}>
         <View style={styles.page}>
@@ -208,11 +203,16 @@ export default function TrainingHomeScreen() {
                   <Text style={styles.eyebrow}>TWÓJ TYDZIEŃ</Text>
                 </View>
                 <Text style={styles.weekCount}>
-                  {sessionsLoading ? '…' : completedWorkouts}<Text style={styles.weekTotal}> z 3 treningów</Text>
+                  {sessionsLoading ? '…' : completedWorkouts}
+                  <Text style={styles.weekTotal}>
+                    {' '}z {weeklyWorkoutGoal} {weeklyWorkoutGoal === 1 ? 'treningu' : 'treningów'}
+                  </Text>
                 </Text>
               </View>
-              <View style={styles.progressTrack} accessibilityLabel={`${completedWorkouts} z 3 treningów`}>
-                {[0, 1, 2].map((segment) => (
+              <View
+                style={styles.progressTrack}
+                accessibilityLabel={`${completedWorkouts} z ${weeklyWorkoutGoal} ${weeklyWorkoutGoal === 1 ? 'treningu' : 'treningów'}`}>
+                {Array.from({ length: weeklyWorkoutGoal }, (_, segment) => (
                   <View
                     key={segment}
                     style={[

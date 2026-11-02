@@ -1,4 +1,5 @@
-import { PropsWithChildren, useRef } from 'react';
+import { useRef } from 'react';
+import type { ComponentRef, PropsWithChildren } from 'react';
 import { BlurTargetView } from 'expo-blur';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { SafeAreaView, SafeAreaViewProps } from 'react-native-safe-area-context';
@@ -13,7 +14,7 @@ type GlassScreenProps = PropsWithChildren<{
 }>;
 
 export function GlassScreen({ children, className = '', edges, style }: GlassScreenProps) {
-  const blurTarget = useRef<View>(null);
+  const blurTarget = useRef<ComponentRef<typeof View>>(null);
 
   return (
     <GlassBlurTargetContext.Provider value={blurTarget}>

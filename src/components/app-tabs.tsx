@@ -1,74 +1,53 @@
 import { Tabs } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import { View } from 'react-native';
-import type { ComponentProps } from 'react';
-import type { ColorValue } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const accent = '#34D399';
-const muted = '#879284';
-
-function TabIcon({ name, size, color }: { name: ComponentProps<typeof SymbolView>['name']; size: number; color: ColorValue }) {
-  const active = String(color) === accent;
-  return (
-    <View style={active ? { borderRadius: size, boxShadow: `0 0 14px ${accent}66` } : undefined}>
-      <SymbolView name={name} size={size} tintColor={color} />
-    </View>
-  );
-}
+import { AppBottomBar, type AppTabName } from '@/components/app-bottom-bar';
 
 export default function AppTabs() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
+      tabBar={(props) => {
+        const activeTab = props.state.routes[props.state.index].name as AppTabName;
+        const activeRoute = props.state.routes[props.state.index];
+
+        return (
+          <AppBottomBar
+            activeTab={activeTab}
+            bottomInset={props.insets.bottom}
+            onNavigate={(tab) => {
+              const route = props.state.routes.find((item) => item.name === tab);
+              if (!route) return;
+
+              const event = props.emitter.emit({
+                type: 'tabPress',
+                target: route.key,
+                canPreventDefault: true,
+              });
+              if (!event.defaultPrevented && route.key !== activeRoute.key) {
+                props.navigateToTab(route.key);
+              }
+            }}
+          />
+        );
+      }}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: accent,
-        tabBarInactiveTintColor: muted,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         tabBarStyle: {
-          backgroundColor: '#101510',
-          borderTopColor: 'rgba(255, 255, 255, 0.08)',
-          height: 64,
-          paddingTop: 7,
-          paddingBottom: 7,
+          backgroundColor: '#080B09',
+          borderTopWidth: 0,
+          elevation: 0,
+          height: 62 + insets.bottom,
         },
-        tabBarItemStyle: {
-          alignItems: 'center',
-          flex: 1,
-          justifyContent: 'center',
-          minWidth: 0,
-        },
-        tabBarIconStyle: {
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
+        sceneStyle: { backgroundColor: '#080B09' },
       }}>
       <Tabs.Screen
         name="training"
-        options={{
-          title: 'Treningi',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon name={{ ios: 'dumbbell.fill', android: 'fitness_center', web: 'fitness_center' }} size={size} color={color} />
-          ),
-        }}
+        options={{ title: 'Treningi' }}
       />
-      <Tabs.Screen
-        name="history"
-        options={{
-          title: 'Historia',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon name={{ ios: 'chart.bar.xaxis', android: 'monitoring', web: 'monitoring' }} size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="account"
-        options={{
-          title: 'Konto',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon name={{ ios: 'person.crop.circle', android: 'account_circle', web: 'account_circle' }} size={size} color={color} />
-          ),
-        }}
-      />
+      <Tabs.Screen name="history" options={{ title: 'Historia' }} />
+      <Tabs.Screen name="account" options={{ title: 'Konto' }} />
     </Tabs>
   );
 }
