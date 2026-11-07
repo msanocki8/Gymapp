@@ -1,7 +1,8 @@
 import { useLocalSearchParams, usePreventRemove, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import * as SecureStore from 'expo-secure-store';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { ViewStyle } from 'react-native';
 import Animated, {
   FadeIn,
@@ -55,6 +56,11 @@ type SessionDraft = {
   setStatuses: ExerciseSetStatuses;
   notes: string;
 };
+const EMPTY_SESSION_DRAFT: SessionDraft = {
+  exerciseConfigs: [],
+  setStatuses: [],
+  notes: '',
+};
 type KeypadTarget = {
   exerciseIndex: number;
   setIndex: number;
@@ -81,6 +87,116 @@ function writeStoredTimestamp(key: string | null, timestamp: number | null) {
   } else {
     window.localStorage.setItem(key, String(timestamp));
   }
+}
+
+function getStoredDraftKey(planId: string) {
+  return `gymapp:workout-draft:${planId}`;
+}
+
+function splitStoredDraft(value: string) {
+  const chunks: string[] = [];
+  let chunk = '';
+  let byteLength = 0;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    const characterBytes = codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
+    if (byteLength + characterBytes > 1500) {
+      chunks.push(chunk);
+      chunk = '';
+      byteLength = 0;
+    }
+    chunk += character;
+    byteLength += characterBytes;
+  }
+  if (chunk) chunks.push(chunk);
+  return chunks;
+}
+
+function getNativeDraftChunkCount(manifest: string | null) {
+  const match = manifest?.match(/^v1:(\d+)$/);
+  const count = match ? Number(match[1]) : 0;
+  if (!Number.isSafeInteger(count) || count < 0) {
+    throw new Error('Zapisany szkic treningu ma nieprawidłowy format.');
+  }
+  return count;
+}
+
+function isSessionDraft(value: unknown): value is SessionDraft {
+  if (!value || typeof value !== 'object') return false;
+  const draft = value as Partial<SessionDraft>;
+  return Array.isArray(draft.exerciseConfigs)
+    && draft.exerciseConfigs.every((exercise) =>
+      typeof exercise.name === 'string'
+      && Array.isArray(exercise.sets)
+      && exercise.sets.every((set) =>
+        typeof set.weight === 'string'
+        && typeof set.reps === 'string'
+        && (set.previous === undefined || typeof set.previous === 'string')))
+    && Array.isArray(draft.setStatuses)
+    && draft.setStatuses.every((statuses) =>
+      Array.isArray(statuses)
+      && statuses.every((status) => status === 'pending' || status === 'completed'))
+    && typeof draft.notes === 'string';
+}
+
+async function readStoredDraft(planId: string): Promise<SessionDraft | null> {
+  const key = getStoredDraftKey(planId);
+  let value: string | null;
+  if (Platform.OS === 'web') {
+    value = typeof window !== 'undefined' ? window.localStorage.getItem(key) : null;
+  } else {
+    const manifest = await SecureStore.getItemAsync(key);
+    if (manifest === null) return null;
+    const chunkCount = getNativeDraftChunkCount(manifest);
+    if (chunkCount === 0) throw new Error('Zapisany szkic treningu ma nieprawidłowy format.');
+    const chunks = await Promise.all(
+      Array.from({ length: chunkCount }, (_, index) =>
+        SecureStore.getItemAsync(`${key}:part:${index}`)),
+    );
+    if (chunks.some((chunk) => chunk === null)) {
+      throw new Error('Nie udało się odczytać całego zapisanego szkicu treningu.');
+    }
+    value = chunks.join('');
+  }
+  if (value === null) return null;
+
+  const parsed: unknown = JSON.parse(value);
+  if (!isSessionDraft(parsed)) {
+    throw new Error('Zapisany szkic treningu ma nieprawidłowy format.');
+  }
+  return parsed;
+}
+
+async function writeStoredDraft(planId: string, draft: SessionDraft) {
+  const key = getStoredDraftKey(planId);
+  const value = JSON.stringify(draft);
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined') window.localStorage.setItem(key, value);
+    return;
+  }
+  const chunks = splitStoredDraft(value);
+  const previousCount = getNativeDraftChunkCount(await SecureStore.getItemAsync(key));
+  await Promise.all(chunks.map((chunk, index) =>
+    SecureStore.setItemAsync(`${key}:part:${index}`, chunk)));
+  await SecureStore.setItemAsync(key, `v1:${chunks.length}`);
+  await Promise.all(
+    Array.from({ length: Math.max(0, previousCount - chunks.length) }, (_, index) =>
+      SecureStore.deleteItemAsync(`${key}:part:${chunks.length + index}`)),
+  );
+}
+
+async function deleteStoredDraft(planId: string) {
+  const key = getStoredDraftKey(planId);
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined') window.localStorage.removeItem(key);
+    return;
+  }
+  const chunkCount = getNativeDraftChunkCount(await SecureStore.getItemAsync(key));
+  await Promise.all([
+    SecureStore.deleteItemAsync(key),
+    ...Array.from({ length: chunkCount }, (_, index) =>
+      SecureStore.deleteItemAsync(`${key}:part:${index}`)),
+  ]);
 }
 
 function clearWorkoutTimerStorage(startKey: string | null, restKey: string | null) {
@@ -125,6 +241,12 @@ export default function WorkoutSessionScreen() {
   const { plans, sessions, recordSession } = useGymApp();
   const plan = plans.find((item) => item.id === planId);
   const [draftsByPlan, setDraftsByPlan] = useState<Record<string, SessionDraft>>({});
+  const [draftLoadedPlanId, setDraftLoadedPlanId] = useState<string | null>(null);
+  const [draftStorageError, setDraftStorageError] = useState<string | null>(null);
+  const draftsByPlanRef = useRef(draftsByPlan);
+  const draftWriteQueue = useRef<Promise<void>>(Promise.resolve());
+  const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const completedDraftPlanIds = useRef(new Set<string>());
   const [isEditingExercises, setIsEditingExercises] = useState(false);
   const [isExercisePickerVisible, setIsExercisePickerVisible] = useState(false);
   const [customExercises, setCustomExercises] = useState<Exercise[]>([]);
@@ -152,10 +274,6 @@ export default function WorkoutSessionScreen() {
   const workoutStartKey = planId ? `gymapp:workout-start:${planId}` : null;
   const restDeadlineKey = planId ? `gymapp:workout-rest:${planId}` : null;
   const activePlan = plan ?? EMPTY_PLAN;
-  const initialDraft = useMemo(
-    () => createSessionDraft(activePlan),
-    [activePlan],
-  );
 
   const disableWorkoutRemovalPrevention = usePreventRemove(Boolean(plan && !allowExit), ({ repeat }) => {
     const leaveWorkout = () => {
@@ -220,7 +338,85 @@ export default function WorkoutSessionScreen() {
     };
   }, [restDeadlineKey, workoutStartKey]);
 
-  const draft = draftsByPlan[activePlan.id] ?? initialDraft;
+  useEffect(() => {
+    draftsByPlanRef.current = draftsByPlan;
+  }, [draftsByPlan]);
+
+  useEffect(() => {
+    if (!plan) return;
+    let cancelled = false;
+    const currentPlan = plan;
+    setDraftStorageError(null);
+    void readStoredDraft(currentPlan.id).then((storedDraft) => {
+      if (cancelled) return;
+      const currentDraft = draftsByPlanRef.current[currentPlan.id]
+        ?? storedDraft
+        ?? createSessionDraft(currentPlan);
+      draftsByPlanRef.current = {
+        ...draftsByPlanRef.current,
+        [currentPlan.id]: currentDraft,
+      };
+      setDraftsByPlan((current) => current[currentPlan.id]
+        ? current
+        : { ...current, [currentPlan.id]: currentDraft });
+      setDraftLoadedPlanId(currentPlan.id);
+    }).catch((error: unknown) => {
+      if (cancelled) return;
+      console.error('Failed to load workout draft:', error);
+      setDraftStorageError('Nie udało się odczytać zapisanego szkicu treningu.');
+      const currentDraft = draftsByPlanRef.current[currentPlan.id]
+        ?? createSessionDraft(currentPlan);
+      draftsByPlanRef.current = {
+        ...draftsByPlanRef.current,
+        [currentPlan.id]: currentDraft,
+      };
+      setDraftsByPlan((current) => current[currentPlan.id]
+        ? current
+        : { ...current, [currentPlan.id]: currentDraft });
+      setDraftLoadedPlanId(currentPlan.id);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [plan]);
+
+  const draft = draftsByPlan[activePlan.id] ?? EMPTY_SESSION_DRAFT;
+
+  useEffect(() => {
+    if (!plan || draftLoadedPlanId !== plan.id || completedDraftPlanIds.current.has(plan.id)) return;
+    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    draftSaveTimer.current = setTimeout(() => {
+      draftSaveTimer.current = null;
+      draftWriteQueue.current = draftWriteQueue.current
+        .then(() => writeStoredDraft(plan.id, draft))
+        .catch((error: unknown) => {
+          console.error('Failed to save workout draft:', error);
+          setDraftStorageError('Nie udało się zapisać szkicu treningu.');
+        });
+    }, 300);
+  }, [draft, draftLoadedPlanId, plan]);
+
+  useEffect(() => {
+    if (!plan) return;
+    const currentPlanId = plan.id;
+    return () => {
+      if (draftSaveTimer.current) {
+        clearTimeout(draftSaveTimer.current);
+        draftSaveTimer.current = null;
+      }
+      if (!completedDraftPlanIds.current.has(currentPlanId)) {
+        const latestDraft = draftsByPlanRef.current[currentPlanId];
+        if (latestDraft) {
+          draftWriteQueue.current = draftWriteQueue.current
+            .then(() => writeStoredDraft(currentPlanId, latestDraft))
+            .catch((error: unknown) => {
+              console.error('Failed to save workout draft on exit:', error);
+            });
+        }
+      }
+    };
+  }, [plan]);
+
   const { exerciseConfigs, setStatuses, notes } = draft;
   const sessionExerciseNames = exerciseConfigs.map((config) => config.name);
   const setCounts = exerciseConfigs.map((config) => config.sets.length);
@@ -301,11 +497,30 @@ export default function WorkoutSessionScreen() {
     );
   }
 
+  if (draftLoadedPlanId !== plan.id) {
+    return (
+      <WorkoutScreen>
+        <WorkoutHeader eyebrow="TRENING W TOKU" onBack={requestWorkoutExit} />
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator color="#A3E635" />
+          <Text className="mt-3 text-sm text-zinc-400">Wczytywanie szkicu treningu…</Text>
+        </View>
+      </WorkoutScreen>
+    );
+  }
+
   function updateDraft(updater: (current: SessionDraft) => SessionDraft) {
-    setDraftsByPlan((current) => ({
-      ...current,
-      [activePlan.id]: updater(current[activePlan.id] ?? initialDraft),
-    }));
+    const updatedDraft = updater(
+      draftsByPlanRef.current[activePlan.id]
+        ?? draftsByPlan[activePlan.id]
+        ?? createSessionDraft(activePlan),
+    );
+    const updatedDrafts = {
+      ...draftsByPlanRef.current,
+      [activePlan.id]: updatedDraft,
+    };
+    draftsByPlanRef.current = updatedDrafts;
+    setDraftsByPlan(updatedDrafts);
   }
 
   function setRestTimer(seconds: number) {
@@ -507,6 +722,22 @@ export default function WorkoutSessionScreen() {
         exercisePerformance,
         notes,
       );
+      completedDraftPlanIds.current.add(activePlan.id);
+      if (draftSaveTimer.current) {
+        clearTimeout(draftSaveTimer.current);
+        draftSaveTimer.current = null;
+      }
+      await draftWriteQueue.current;
+      try {
+        await deleteStoredDraft(activePlan.id);
+      } catch (error) {
+        console.error('Failed to delete completed workout draft:', error);
+        setDraftStorageError('Trening zapisano, ale nie udało się usunąć jego szkicu.');
+      }
+      const remainingDrafts = { ...draftsByPlanRef.current };
+      delete remainingDrafts[activePlan.id];
+      draftsByPlanRef.current = remainingDrafts;
+      setDraftsByPlan(remainingDrafts);
       clearWorkoutTimerStorage(workoutStartKey, restDeadlineKey);
       allowExitRef.current = true;
       setAllowExit(true);
@@ -991,6 +1222,9 @@ export default function WorkoutSessionScreen() {
         </View>
       )}
       <View pointerEvents="box-none" style={styles.footer}>
+        {draftStorageError ? (
+          <Text accessibilityRole="alert" className="mb-2 text-center text-xs leading-5 text-amber-200">{draftStorageError}</Text>
+        ) : null}
         {saveError ? (
           <Text accessibilityRole="alert" className="mb-2 text-center text-xs leading-5 text-red-300">{saveError}</Text>
         ) : null}
