@@ -40,6 +40,10 @@ The app uses [NativeWind](https://www.nativewind.dev/) with Tailwind CSS 3. Util
 
 Nick names are case-insensitive and limited to 3–24 ASCII letters, digits, `_`, or `-`. Passwords must be 8–128 characters. Native clients persist the Supabase session in Expo SecureStore; web clients use browser local storage. User-created plans are fetched by the signed-in user's ID and the database RLS policies independently enforce the same ownership boundary.
 
+### Deploying the web app to Vercel
+
+Vercel does not read your local `.env` file. In the Vercel project's **Settings → Environment Variables**, add `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` using the values from the Supabase project's API settings. Apply them to the environments you deploy (Production, and Preview if needed), then redeploy so Expo can embed them in the web build. Use only the public publishable/anon key; never add the service-role key. The Vercel build now stops with an explicit error if either variable is missing.
+
 ## Get a fresh project
 
 When you're ready, run:

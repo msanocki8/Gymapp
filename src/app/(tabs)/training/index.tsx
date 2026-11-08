@@ -1,5 +1,16 @@
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useRef, type ComponentProps } from 'react';
+import { cssInterop } from 'nativewind';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useRef,
+  type ComponentProps,
+  type ComponentRef,
+  type RefObject,
+} from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -11,10 +22,10 @@ import {
 } from 'react-native';
 import type { ScrollViewInstance, ViewStyle } from 'react-native';
 import { SymbolView } from 'expo-symbols';
-import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Text as SvgText } from 'react-native-svg';
-import { GlassPanel } from '@/components/glass-panel';
-import { GlassScreen } from '@/components/glass-screen';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import glassTokens from '@/constants/glass-tokens.json';
+import { AmbientBackground } from '@/components/ambient-background';
+import { GradientText } from '@/components/gradient-text';
 import { useGymApp } from '@/hooks/use-gym-app';
 import type { WorkoutPlan } from '@/hooks/use-gym-app';
 import { useAuth } from '@/hooks/use-auth';
@@ -22,39 +33,49 @@ import { countWorkoutsThisWeek } from '@/lib/workout-goal';
 
 type CrossPlatformShadowStyle = ViewStyle & { boxShadow?: string };
 
-const glassStyle: CrossPlatformShadowStyle = {
-  backgroundColor: 'rgba(9, 18, 13, 0.72)',
-  borderColor: 'rgba(255, 255, 255, 0.12)',
-  borderTopColor: 'rgba(255, 255, 255, 0.18)',
-  ...(Platform.OS === 'web'
-    ? { boxShadow: '0 10px 24px rgba(0, 0, 0, 0.2)' }
-    : {
-        shadowColor: '#166534',
-        shadowOpacity: 0.18,
-        shadowRadius: 20,
-        shadowOffset: { width: 0, height: 8 },
-        elevation: 4,
-      }),
-};
-
-const startButtonGlowStyle: CrossPlatformShadowStyle = Platform.OS === 'web'
-  ? { boxShadow: '0 0 22px rgba(163, 230, 53, 0.38)' }
+const cardShadow: CrossPlatformShadowStyle = Platform.OS === 'web'
+  ? { boxShadow: '0 10px 28px rgba(0, 0, 0, 0.26)' }
   : {
-      shadowColor: '#a3e635',
-      shadowOpacity: 0.62,
-      shadowRadius: 22,
-      shadowOffset: { width: 0, height: 0 },
-      elevation: 9,
+      shadowColor: '#000000',
+      shadowOpacity: 0.18,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 4,
     };
 
-const progressSegmentGlowStyle: CrossPlatformShadowStyle = Platform.OS === 'web'
-  ? { boxShadow: '0 0 8px rgba(74, 222, 128, 0.3)' }
+const startButtonGlow: CrossPlatformShadowStyle = Platform.OS === 'web'
+  ? { boxShadow: '0 0 26px rgba(163, 230, 53, 0.58)' }
   : {
-      shadowColor: '#4ade80',
-      shadowOpacity: 0.35,
-      shadowRadius: 6,
+      shadowColor: '#A3E635',
+      shadowOpacity: 0.6,
+      shadowRadius: 18,
       shadowOffset: { width: 0, height: 0 },
+      elevation: 10,
     };
+
+const blurMethod = Platform.OS === 'android' ? 'dimezisBlurViewSdk31Plus' : undefined;
+const LocalBlurTargetContext = createContext<RefObject<ComponentRef<typeof View> | null> | null>(null);
+const cardTopGradient = [
+  glassTokens.gradients.cardTop[0],
+  glassTokens.gradients.cardTop[1],
+  glassTokens.gradients.cardTop[2],
+] as const;
+const planGradient = [
+  glassTokens.gradients.plan[0],
+  glassTokens.gradients.plan[1],
+  glassTokens.gradients.plan[2],
+] as const;
+const planAccentGradient = [
+  glassTokens.gradients.planAccent[0],
+  glassTokens.gradients.planAccent[1],
+  glassTokens.gradients.planAccent[2],
+] as const;
+const startButtonGradient = [
+  glassTokens.gradients.startButton[0],
+  glassTokens.gradients.startButton[1],
+] as const;
+
+cssInterop(LinearGradient, { className: 'style' });
 
 const formatDuration = (minutes: number) => `${minutes} min`;
 
@@ -81,6 +102,59 @@ function AppIcon({
   return <SymbolView name={name} size={size} tintColor={color} />;
 }
 
+function GlassCard({
+  children,
+  className = '',
+  contentClassName = '',
+  plan = false,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  contentClassName?: string;
+  plan?: boolean;
+}) {
+  const blurTarget = useContext(LocalBlurTargetContext);
+
+  return (
+    <View
+      className={`relative w-full overflow-hidden rounded-[26px] border border-glass-border bg-glass-fill ${className}`}
+      style={cardShadow}>
+      {Platform.OS !== 'web' ? (
+        <BlurView
+          pointerEvents="none"
+          blurMethod={blurMethod}
+          blurTarget={blurTarget ?? undefined}
+          intensity={18}
+          tint="dark"
+          style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}
+        />
+      ) : null}
+      <LinearGradient
+        pointerEvents="none"
+        colors={plan
+          ? planGradient
+          : cardTopGradient}
+        locations={[0, 0.52, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: plan ? 0.8 : 1 }}
+        className="absolute inset-0"
+        style={{ borderRadius: 26 }}
+      />
+      {plan ? (
+        <LinearGradient
+          pointerEvents="none"
+          colors={planAccentGradient}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          className="absolute bottom-0 left-0 top-0 w-1/2"
+          style={{ borderRadius: 26 }}
+        />
+      ) : null}
+      <View className={`relative z-10 ${contentClassName}`}>{children}</View>
+    </View>
+  );
+}
+
 function WorkoutPlanCard({
   workout,
   onPress,
@@ -95,51 +169,48 @@ function WorkoutPlanCard({
       accessibilityRole="button"
       accessibilityLabel={`Otwórz plan ${workout.name}`}
       onPress={onPress}
-      style={({ pressed }) => [styles.workoutPressable, pressed && styles.pressed]}>
-      <GlassPanel
-        className="w-full"
-        blurIntensity={20}
-        contentClassName="flex-row items-center"
-        contentStyle={styles.workoutCardContent}
-        style={[glassStyle, styles.homePlanPanel]}>
-        <LinearGradient
-          colors={['rgba(190, 242, 100, 0.16)', 'rgba(74, 222, 128, 0.12)', 'rgba(4, 8, 5, 0.48)']}
-          locations={[0, 0.52, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          pointerEvents="none"
-          style={StyleSheet.absoluteFill}
-        />
-        <View style={styles.workoutIcon}>
-          <AppIcon name={{ ios: 'dumbbell.fill', android: 'fitness_center', web: 'fitness_center' }} size={19} color="#F0ABFC" />
+      className="w-full active:opacity-80">
+      <GlassCard plan contentClassName="flex-row items-center gap-[10px] px-[14px] py-[12px]">
+        <View className="h-[46px] w-[46px] items-center justify-center rounded-[16px] border border-white/10 bg-white/[0.09]">
+          <AppIcon
+            name={{ ios: 'dumbbell.fill', android: 'fitness_center', web: 'fitness_center' }}
+            size={19}
+            color="#F0ABFC"
+          />
         </View>
-        <View className="flex-1 min-w-0" style={styles.workoutText}>
-          <Text numberOfLines={1} style={styles.workoutTitle}>
+        <View className="min-w-0 flex-1 gap-1">
+          <Text numberOfLines={1} className="text-[15px] font-black text-text-primary">
             {workout.name}
           </Text>
-          <Text numberOfLines={1} style={styles.workoutSubtitle}>
+          <Text numberOfLines={1} className="text-[12px] text-text-muted">
             {workout.focus}
           </Text>
         </View>
-        <View style={styles.workoutMeta}>
-          <View style={styles.workoutMetaText}>
-            <Text numberOfLines={1} style={styles.workoutDuration}>
+        <View className="shrink-0 flex-row items-center gap-[9px]">
+          <View className="items-end gap-1">
+            <Text numberOfLines={1} className="text-[13px] font-extrabold text-text-primary">
               {formatDuration(workout.duration)}
             </Text>
-            <Text numberOfLines={1} style={styles.workoutSubtitle}>
+            <Text numberOfLines={1} className="text-[12px] text-text-muted">
               {formatExerciseCount(exerciseCount)}
             </Text>
           </View>
-          <AppIcon name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} size={14} color="#86efac" />
+          <AppIcon
+            name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+            size={14}
+            color="#4ADE80"
+          />
         </View>
-      </GlassPanel>
+      </GlassCard>
     </Pressable>
   );
 }
 
 export default function TrainingHomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollViewInstance>(null);
+  const blurTarget = useRef<ComponentRef<typeof View>>(null);
   const {
     userName,
     plans,
@@ -163,189 +234,197 @@ export default function TrainingHomeScreen() {
   );
 
   return (
-    <GlassScreen edges={['top']}>
-      <ScrollView
-        ref={scrollRef}
-        className="flex-1"
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingHorizontal: 16,
-          paddingTop: 16,
-          paddingBottom: 32,
-        }}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.page}>
-          <View style={styles.header}>
-            <View className="flex-1 min-w-0">
-              <View style={styles.brandRow}>
-                <View style={styles.brandMark}>
-                  <AppIcon name={{ ios: 'figure.strengthtraining.traditional', android: 'fitness_center', web: 'fitness_center' }} size={14} color="#06210D" />
+    <SafeAreaView edges={['top']} className="flex-1 overflow-hidden bg-ink-950">
+      <AmbientBackground blurTarget={blurTarget} />
+      <LocalBlurTargetContext.Provider value={blurTarget}>
+        <ScrollView
+          ref={scrollRef}
+          className="flex-1"
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingHorizontal: 20,
+            paddingTop: 16,
+            paddingBottom: 34 + insets.bottom,
+          }}
+          showsVerticalScrollIndicator={false}>
+        <View className="mx-auto w-full max-w-[560px] gap-[22px]">
+          <View className="flex-row items-center justify-between gap-[14px]">
+            <View className="min-w-0 flex-1">
+              <View className="flex-row items-center">
+                <View className="mr-2 h-[28px] flex-row items-center gap-[7px] rounded-full bg-[#4ADE80] px-[11px]">
+                  <AppIcon
+                    name={{ ios: 'figure.strengthtraining.traditional', android: 'fitness_center', web: 'fitness_center' }}
+                    size={14}
+                    color="#06210D"
+                  />
+                  <Text className="text-[12px] font-black tracking-[1.4px] text-[#06210D]">GYM LOG</Text>
                 </View>
-                <Text style={styles.brand}>GYM LOG</Text>
               </View>
-              <Text style={styles.brandSubtitle}>Twoje prywatne zapiski</Text>
+              <Text className="ml-[2px] mt-[4px] text-[12px] text-text-muted">
+                Twoje prywatne zapiski
+              </Text>
             </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Ustawienia konta"
               onPress={() => router.push('/(tabs)/account')}
-              style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}>
-              <AppIcon name={{ ios: 'gearshape.fill', android: 'settings', web: 'settings' }} size={20} color="#BEF264" />
+              className="h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/35 active:opacity-75">
+              <AppIcon
+                name={{ ios: 'gearshape.fill', android: 'settings', web: 'settings' }}
+                size={20}
+                color="#A3E635"
+              />
             </Pressable>
           </View>
 
-          <View style={styles.greeting}>
-            <Text style={styles.greetingLabel}>Dzień dobry,</Text>
-            <Text numberOfLines={1} style={styles.greetingName}>{userName}</Text>
-            <Text style={styles.greetingSubtitle}>Gotowy na jeszcze jeden dobry dzień? ✨</Text>
+          <View className="min-w-0">
+            <GradientText>Dzień dobry,</GradientText>
+            <GradientText>{userName}</GradientText>
+            <Text className="mt-[6px] text-[14px] leading-[21px] text-text-muted">
+              Gotowy na jeszcze jeden dobry dzień? ✨
+            </Text>
           </View>
 
-          <GlassPanel
-            className="w-full"
-            blurIntensity={20}
-            contentClassName="w-full"
-            contentStyle={styles.cardContent}
-            tone="mint"
-            style={glassStyle}>
-            <LinearGradient
-              colors={['rgba(22, 101, 52, 0.24)', 'rgba(9, 18, 13, 0.78)']}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
-              pointerEvents="none"
-              style={StyleSheet.absoluteFill}
-            />
-            <View style={styles.weekContent}>
-              <View style={styles.weekStats}>
-                <View style={styles.sectionEyebrowRow}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.eyebrow}>TWÓJ TYDZIEŃ</Text>
+          <GlassCard contentClassName="w-full px-5 py-[17px]">
+            <View className="flex-row items-center justify-between gap-[14px]">
+              <View className="gap-[5px]">
+                <View className="flex-row items-center gap-[8px]">
+                  <View className="h-[7px] w-[7px] rounded-full bg-neon-bright" />
+                  <Text className="text-[11px] font-black tracking-[1.7px] text-neon-bright">
+                    TWÓJ TYDZIEŃ
+                  </Text>
                 </View>
-                <Text style={styles.weekCount}>
+                <Text className="text-[28px] font-black leading-[32px] text-neon-green">
                   {sessionsLoading ? '…' : completedWorkouts}
-                  <Text style={styles.weekTotal}>
+                  <Text className="text-[13px] font-medium text-text-muted">
                     {' '}z {weeklyWorkoutGoal} {weeklyWorkoutGoal === 1 ? 'treningu' : 'treningów'}
                   </Text>
                 </Text>
               </View>
               <View
-                style={styles.progressTrack}
+                className="w-[124px] flex-row gap-1"
                 accessibilityLabel={`${completedWorkouts} z ${weeklyWorkoutGoal} ${weeklyWorkoutGoal === 1 ? 'treningu' : 'treningów'}`}>
                 {Array.from({ length: weeklyWorkoutGoal }, (_, segment) => (
                   <View
                     key={segment}
-                    style={[
-                      styles.progressSegment,
-                      segment < completedWorkouts && styles.progressSegmentActive,
-                      segment < completedWorkouts && progressSegmentGlowStyle,
-                    ]}
+                    className={`h-[5px] min-w-0 flex-1 rounded-full ${
+                      segment < completedWorkouts ? 'bg-neon-bright' : 'bg-white/[0.14]'
+                    }`}
+                    style={segment < completedWorkouts ? styles.progressGlow : undefined}
                   />
                 ))}
               </View>
             </View>
             {sessionsError ? (
-              <Text style={styles.weekHint}>Nie udało się pobrać postępów. Spróbuj odświeżyć ekran.</Text>
+              <Text className="mt-[10px] text-[12px] leading-[18px] text-red-300">
+                Nie udało się pobrać postępów. Spróbuj odświeżyć ekran.
+              </Text>
             ) : null}
-          </GlassPanel>
+          </GlassCard>
 
-          <GlassPanel
-            className="w-full"
-            blurIntensity={18}
-            contentClassName="w-full"
-            contentStyle={styles.featureContent}
-            tone="mint"
-            style={[glassStyle, styles.featurePanel]}>
-            <LinearGradient
-              colors={['rgba(20, 40, 27, 0.84)', 'rgba(4, 8, 5, 0.78)']}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
-              pointerEvents="none"
-              style={StyleSheet.absoluteFill}
-            />
-            <View style={styles.featureTagRow}>
-              <View style={styles.featureTag}>
-                <View style={styles.featureTagDot} />
-                <Text style={styles.featureTagText}>KROK 1 Z 3  ·  CZAS NA RUCH</Text>
+          <GlassCard className="border-white/[0.16]" contentClassName="w-full p-[21px]">
+            <View className="flex-row items-center justify-between gap-3">
+              <View className="flex-row items-center gap-[8px] rounded-full border border-neon-bright/30 bg-neon-green/10 px-[12px] py-[8px]">
+                <View className="h-[7px] w-[7px] rounded-full bg-neon-lime" />
+                <Text className="text-[10px] font-black tracking-[1.1px] text-neon-lime">
+                  KROK 1 Z 3  ·  CZAS NA RUCH
+                </Text>
               </View>
-              <AppIcon name={{ ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }} size={20} color="#BEF264" />
+              <AppIcon
+                name={{ ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }}
+                size={20}
+                color="#A3E635"
+              />
             </View>
-            <View style={styles.featureTitle}>
-              <Text style={styles.featureTitlePrimary}>Zrób coś</Text>
-              <Svg width={190} height={38} viewBox="0 0 190 38" accessibilityLabel="swojego.">
-                <Defs>
-                  <SvgLinearGradient id="training-title-gradient" x1="0" y1="0" x2="1" y2="0">
-                    <Stop offset="0" stopColor="#BEF264" />
-                    <Stop offset="0.52" stopColor="#4ADE80" />
-                    <Stop offset="1" stopColor="#86EFAC" />
-                  </SvgLinearGradient>
-                </Defs>
-                <SvgText x={0} y={31} fill="url(#training-title-gradient)" fontSize={32} fontWeight="900" letterSpacing={-0.9}>
-                  swojego.
-                </SvgText>
-              </Svg>
-            </View>
-            <Text style={styles.featureDescription}>
+            <Text className="mt-[20px] text-[32px] font-black leading-[37px] tracking-[-0.8px] text-text-primary">
+              Zrób coś
+            </Text>
+            <Text className="text-[32px] font-black leading-[37px] tracking-[-0.8px] text-neon-lime">
+              swojego.
+            </Text>
+            <Text className="mt-[12px] max-w-[370px] text-[14px] leading-[21px] text-text-muted">
               Nawet najmniejszy ruch się liczy. Załóż buty i idź po swoje.
             </Text>
-            <View style={styles.featureActions}>
-              <View style={[styles.startButtonGlow, startButtonGlowStyle]}>
+            <View className="mt-[20px] gap-[14px]">
+              <View className="w-full overflow-visible rounded-full" style={startButtonGlow}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Rozpocznij trening"
                   onPress={() => router.push('/workout-flow')}
                   android_ripple={{ color: 'rgba(0, 0, 0, 0.14)' }}
-                  style={({ pressed }) => [styles.startButton, pressed && styles.startButtonPressed]}>
+                  className="min-h-[56px] w-full overflow-hidden rounded-full active:opacity-85">
                   <LinearGradient
-                    colors={['#22C55E', '#A3E635']}
+                    colors={startButtonGradient}
                     start={{ x: 0, y: 0.5 }}
                     end={{ x: 1, y: 0.5 }}
-                    style={styles.startButtonSurface}>
-                    <AppIcon name={{ ios: 'play.fill', android: 'play_arrow', web: 'play_arrow' }} size={17} color="#000000" />
-                    <Text style={styles.startButtonText}>Rozpocznij trening</Text>
+                    className="min-h-[56px] w-full flex-row items-center justify-center gap-[11px] rounded-full px-4">
+                    <AppIcon
+                      name={{ ios: 'play.fill', android: 'play_arrow', web: 'play_arrow' }}
+                      size={17}
+                      color="#07150C"
+                    />
+                    <Text className="text-[16px] font-black text-[#07150C]">
+                      Rozpocznij trening
+                    </Text>
                   </LinearGradient>
                 </Pressable>
               </View>
-              <View style={styles.sloganRow}>
-                <AppIcon name={{ ios: 'bolt.fill', android: 'bolt', web: 'bolt' }} size={15} color="#BEF264" />
-                <Text style={styles.slogan}>Twój plan. Twoje tempo. Twój progres.</Text>
+              <View className="flex-row items-center gap-[9px]">
+                <AppIcon
+                  name={{ ios: 'bolt.fill', android: 'bolt', web: 'bolt' }}
+                  size={15}
+                  color="#A3E635"
+                />
+                <Text className="text-[13px] font-semibold text-text-muted">
+                  Twój plan. Twoje tempo. Twój progres.
+                </Text>
               </View>
             </View>
-          </GlassPanel>
+          </GlassCard>
 
-          <View style={styles.plansSection}>
-            <View style={styles.plansHeader}>
-              <View className="flex-1 min-w-0">
-                <Text style={styles.plansEyebrow}>DODANE PLANY</Text>
-                <Text style={styles.plansTitle}>Twoje poranne treningi</Text>
+          <View className="gap-[13px]">
+            <View className="flex-row items-end justify-between gap-[10px] px-px">
+              <View className="min-w-0 flex-1">
+                <Text className="mb-[5px] text-[10px] font-black tracking-[1.6px] text-neon-lime">
+                  DODANE PLANY
+                </Text>
+                <Text className="text-[22px] font-black leading-[27px] tracking-[-0.4px] text-text-primary">
+                  Twoje poranne treningi
+                </Text>
               </View>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => router.push('/workout-flow')}
-                style={({ pressed }) => [styles.allPlansButton, pressed && styles.pressed]}>
-                <Text style={styles.allPlansText}>Wszystkie</Text>
-                <AppIcon name={{ ios: 'arrow.right', android: 'arrow_forward', web: 'arrow_forward' }} size={13} color="#BEF264" />
+                className="flex-row items-center gap-[5px] py-[7px] pl-2 active:opacity-75">
+                <Text className="text-[12px] font-bold text-neon-bright">Wszystkie</Text>
+                <AppIcon
+                  name={{ ios: 'arrow.right', android: 'arrow_forward', web: 'arrow_forward' }}
+                  size={13}
+                  color="#A3E635"
+                />
               </Pressable>
             </View>
 
             {plansLoading ? (
-              <GlassPanel className="w-full" blurIntensity={20} contentStyle={styles.loadingContent} style={glassStyle}>
-                <ActivityIndicator color="#4ade80" />
-                <Text style={styles.loadingText}>Ładowanie Twoich planów…</Text>
-              </GlassPanel>
+              <GlassCard contentClassName="min-h-[86px] flex-row items-center justify-center gap-[11px] p-[18px]">
+                <ActivityIndicator color="#A3E635" />
+                <Text className="text-[13px] text-text-primary">Ładowanie Twoich planów…</Text>
+              </GlassCard>
             ) : plansError ? (
-              <GlassPanel className="w-full" blurIntensity={20} contentStyle={styles.errorContent} style={glassStyle}>
-                <Text style={styles.errorText}>{plansError}</Text>
+              <GlassCard contentClassName="gap-3 p-[17px]">
+                <Text className="text-[13px] leading-[19px] text-red-200">{plansError}</Text>
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => {
                     void reloadPlans();
                     void reloadSessions();
                   }}
-                  style={styles.retryButton}>
-                  <Text style={styles.retryText}>Spróbuj ponownie</Text>
+                  className="self-start rounded-xl bg-red-400/10 px-[11px] py-[7px]">
+                  <Text className="text-[12px] font-bold text-red-300">Spróbuj ponownie</Text>
                 </Pressable>
-              </GlassPanel>
+              </GlassCard>
             ) : plans.length > 0 ? (
-              <View style={styles.workoutList}>
+              <View className="gap-[10px]">
                 {plans.slice(0, 3).map((workout) => (
                   <WorkoutPlanCard
                     key={workout.id}
@@ -355,409 +434,38 @@ export default function TrainingHomeScreen() {
                 ))}
               </View>
             ) : (
-              <GlassPanel className="w-full" blurIntensity={20} contentStyle={styles.emptyContent} style={glassStyle}>
-                <Text style={styles.emptyTitle}>Zacznij od własnego planu</Text>
-                <Text style={styles.emptyDescription}>
+              <GlassCard contentClassName="gap-2 p-[18px]">
+                <Text className="text-[14px] font-extrabold text-text-primary">
+                  Zacznij od własnego planu
+                </Text>
+                <Text className="text-[12px] leading-[18px] text-text-muted">
                   Dodaj ćwiczenia i zapisz trening na swoim koncie.
                 </Text>
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => router.push('/create-workout')}
-                  style={styles.emptyButton}>
-                  <Text style={styles.emptyButtonText}>Utwórz plan</Text>
-                  <AppIcon name={{ ios: 'plus', android: 'add', web: 'add' }} size={14} color="#4ade80" />
+                  className="mt-[5px] self-start flex-row items-center gap-2 py-2">
+                  <Text className="text-[12px] font-extrabold text-neon-bright">Utwórz plan</Text>
+                  <AppIcon name={{ ios: 'plus', android: 'add', web: 'add' }} size={14} color="#4ADE80" />
                 </Pressable>
-              </GlassPanel>
+              </GlassCard>
             )}
           </View>
         </View>
-      </ScrollView>
-    </GlassScreen>
+        </ScrollView>
+      </LocalBlurTargetContext.Provider>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  page: {
-    width: '100%',
-    maxWidth: 560,
-    alignSelf: 'center',
-    gap: 22,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 14,
-  },
-  brandRow: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#4ADE80',
-    borderRadius: 999,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  brandMark: {
-    width: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brand: {
-    color: '#06210D',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-  },
-  brandSubtitle: {
-    color: '#8F9A93',
-    fontSize: 12,
-    marginTop: 3,
-    marginLeft: 2,
-  },
-  settingsButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(134, 239, 172, 0.22)',
-    backgroundColor: 'rgba(74, 222, 128, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  greeting: {
-    minWidth: 0,
-  },
-  greetingLabel: {
-    color: '#F9FAFB',
-    fontSize: 38,
-    lineHeight: 43,
-    fontWeight: '800',
-  },
-  greetingName: {
-    color: '#BEF264',
-    fontSize: 38,
-    lineHeight: 43,
-    fontWeight: '900',
-    letterSpacing: -1,
-    marginTop: 2,
-  },
-  greetingSubtitle: {
-    color: '#8F9A93',
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 6,
-  },
-  cardContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  weekContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 14,
-  },
-  weekStats: {
-    gap: 5,
-  },
-  sectionEyebrowRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 9,
-  },
-  liveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#4ade80',
-  },
-  eyebrow: {
-    color: '#86EFAC',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 2,
-  },
-  weekCount: {
-    color: '#4ADE80',
-    fontSize: 30,
-    lineHeight: 34,
-    fontWeight: '900',
-  },
-  weekTotal: {
-    color: '#8F9A93',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  progressTrack: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  progressSegment: {
-    width: 26,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.10)',
-  },
-  progressSegmentActive: {
-    backgroundColor: '#4ADE80',
-  },
-  weekHint: {
-    color: '#fca5a5',
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 10,
-  },
-  featurePanel: {
-    backgroundColor: 'rgba(9, 18, 13, 0.55)',
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    borderTopColor: 'rgba(255, 255, 255, 0.16)',
-  },
-  featureContent: {
-    padding: 21,
-  },
-  featureTagRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  featureTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(190, 242, 100, 0.32)',
-    borderRadius: 20,
-    backgroundColor: 'rgba(34, 197, 94, 0.08)',
-  },
-  featureTagText: {
-    color: '#BEF264',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-  },
-  featureTagDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#BEF264',
-  },
-  featureTitle: {
-    alignSelf: 'flex-start',
-    marginTop: 20,
-  },
-  featureTitlePrimary: {
-    color: '#F9FAFB',
-    fontSize: 32,
-    lineHeight: 38,
-    fontWeight: '900',
-    letterSpacing: -0.9,
-  },
-  featureDescription: {
-    color: '#8F9A93',
-    fontSize: 14,
-    lineHeight: 22,
-    marginTop: 9,
-    maxWidth: 370,
-  },
-  featureActions: {
-    gap: 14,
-    marginTop: 21,
-  },
-  startButton: {
-    width: '100%',
-    height: 53,
-    flexShrink: 0,
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  startButtonGlow: {
-    width: '100%',
-    borderRadius: 999,
-    overflow: 'visible',
-  },
-  startButtonSurface: {
-    width: '100%',
-    height: 53,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    alignSelf: 'stretch',
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    gap: 11,
-  },
-  startButtonPressed: {
-    opacity: 0.84,
-  },
-  startButtonText: {
-    color: '#000000',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  sloganRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 9,
-  },
-  slogan: {
-    color: '#8F9A93',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  plansSection: {
-    gap: 13,
-  },
-  plansHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: 10,
-    paddingHorizontal: 1,
-  },
-  plansEyebrow: {
-    color: '#BEF264',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.6,
-    marginBottom: 5,
-  },
-  plansTitle: {
-    color: '#F9FAFB',
-    fontSize: 21,
-    lineHeight: 26,
-    fontWeight: '900',
-    letterSpacing: -0.4,
-  },
-  allPlansButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 7,
-    paddingLeft: 8,
-  },
-  allPlansText: {
-    color: '#BEF264',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  workoutList: {
-    gap: 12,
-  },
-  workoutPressable: {
-    width: '100%',
-  },
-  workoutCardContent: {
-    paddingVertical: 13,
-    paddingHorizontal: 14,
-    gap: 10,
-  },
-  homePlanPanel: {
-    backgroundColor: 'rgba(9, 18, 13, 0.62)',
-    borderColor: 'rgba(255, 255, 255, 0.16)',
-  },
-  workoutIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  workoutText: {
-    gap: 5,
-  },
-  workoutTitle: {
-    color: '#F9FAFB',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  workoutSubtitle: {
-    color: '#8F9A93',
-    fontSize: 12,
-  },
-  workoutMetaText: {
-    alignItems: 'flex-end',
-    gap: 4,
-  },
-  workoutMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flexShrink: 0,
-  },
-  workoutDuration: {
-    color: '#F9FAFB',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  loadingContent: {
-    minHeight: 86,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 11,
-  },
-  loadingText: {
-    color: '#d1d5db',
-    fontSize: 13,
-  },
-  errorContent: {
-    padding: 17,
-    gap: 12,
-  },
-  errorText: {
-    color: '#fecaca',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  retryButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 7,
-    paddingHorizontal: 11,
-    borderRadius: 12,
-    backgroundColor: 'rgba(248, 113, 113, 0.12)',
-  },
-  retryText: {
-    color: '#fca5a5',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  emptyContent: {
-    padding: 18,
-    gap: 8,
-  },
-  emptyTitle: {
-    color: '#f9fafb',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  emptyDescription: {
-    color: '#a1a1aa',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  emptyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    alignSelf: 'flex-start',
-    marginTop: 5,
-    paddingVertical: 8,
-  },
-  emptyButtonText: {
-    color: '#4ade80',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  pressed: {
-    opacity: 0.78,
-  },
+  progressGlow: Platform.select({
+    web: { boxShadow: '0 0 8px rgba(74, 222, 128, 0.4)' } as ViewStyle,
+    default: {
+      shadowColor: '#4ADE80',
+      shadowOpacity: 0.4,
+      shadowRadius: 7,
+      shadowOffset: { width: 0, height: 0 },
+    },
+  }),
 });

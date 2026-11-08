@@ -2,6 +2,7 @@ import { useId } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, Stop } from 'react-native-svg';
 
+import { muscleVolumeMapColors } from '@/constants/muscle-volume';
 import type { Exercise } from '@/constants/exercise-library';
 import type { MuscleId, MuscleStatus, MuscleVolume } from '@/lib/muscle-volume';
 
@@ -42,8 +43,8 @@ const matchers: Record<MuscleGroup, RegExp> = {
   lateralDelts: /boczny akton bark/,
   rearDelts: /tylny akton bark|tylna czesc bark|bark.*tyl|rotator/,
   triceps: /triceps/,
-  biceps: /biceps/,
-  forearms: /przedramion/,
+  biceps: /biceps|ramienn(?!o)/,
+  forearms: /przedramion|ramienno-promieniow/,
   traps: /czworobocz|trapezi|srodek plecow|gorna czesc plecow/,
   lats: /najszers|szeroki grzbiet|latissimus/,
   lowerBack: /prostownik.*grzbiet|prostowniki grzbiet|dolna czesc plecow/,
@@ -62,21 +63,21 @@ const colors: Record<MuscleRole, { start: string; end: string; glow: string }> =
 };
 
 const volumeColors: Record<MuscleStatus, { fill: string; glow: string }> = {
-  'no-stimulus': { fill: '#303B34', glow: '#536159' },
-  below: { fill: '#3979D6', glow: '#69A8FF' },
-  'in-range': { fill: '#79DD20', glow: '#B7FF35' },
-  warning: { fill: '#D94343', glow: '#FF7474' },
+  'no-stimulus': { fill: muscleVolumeMapColors['no-stimulus'].fill, glow: muscleVolumeMapColors['no-stimulus'].glow },
+  below: { fill: muscleVolumeMapColors.below.fill, glow: muscleVolumeMapColors.below.glow },
+  'in-range': { fill: muscleVolumeMapColors['in-range'].fill, glow: muscleVolumeMapColors['in-range'].glow },
+  warning: { fill: muscleVolumeMapColors.warning.fill, glow: muscleVolumeMapColors.warning.glow },
 };
 const volumeHighlights: Record<MuscleStatus, string> = {
-  'no-stimulus': '#829087',
-  below: '#C2E4FF',
-  'in-range': '#E8FFAA',
-  warning: '#FFC0C0',
+  'no-stimulus': muscleVolumeMapColors['no-stimulus'].highlight,
+  below: muscleVolumeMapColors.below.highlight,
+  'in-range': muscleVolumeMapColors['in-range'].highlight,
+  warning: muscleVolumeMapColors.warning.highlight,
 };
 
 const frontRegions: MuscleRegion[] = [
-  { group: 'frontDelts', path: 'M98 88 C87 85 76 91 73 102 C70 112 76 123 87 127 L105 116 L116 101 Z' },
-  { group: 'lateralDelts', path: 'M99 87 C88 80 73 84 64 94 C55 104 56 117 64 127 C71 136 82 137 92 130 L107 116 C114 108 117 99 112 93 C109 90 104 88 99 87 Z' },
+  { group: 'frontDelts', path: 'M101 88 C91 85 81 90 77 99 L82 112 L96 119 L114 101 C111 95 106 90 101 88 Z' },
+  { group: 'lateralDelts', path: 'M76 97 C67 98 61 104 60 113 C59 123 66 131 78 133 L91 122 L82 113 C77 109 75 103 76 97 Z' },
   { group: 'chest', path: 'M137 104 C127 96 111 95 99 101 C91 105 89 115 92 126 C96 139 111 148 133 150 C137 140 139 127 137 104 Z' },
   { group: 'upperChest', path: 'M136 105 C126 99 111 98 100 103 C96 106 95 110 95 115 C108 112 123 114 136 121 Z' },
   { group: 'biceps', path: 'M76 130 C68 135 65 147 68 159 L76 183 C79 190 87 192 92 187 L89 159 C88 150 91 142 97 136 Z' },
@@ -91,8 +92,8 @@ const frontRegions: MuscleRegion[] = [
 ];
 
 const backRegions: MuscleRegion[] = [
-  { group: 'rearDelts', path: 'M98 88 C87 85 76 91 73 102 C70 112 76 123 87 127 L105 116 L116 101 Z' },
-  { group: 'lateralDelts', path: 'M99 87 C88 80 73 84 64 94 C55 104 56 117 64 127 C71 136 82 137 92 130 L107 116 C114 108 117 99 112 93 C109 90 104 88 99 87 Z' },
+  { group: 'rearDelts', path: 'M101 88 C90 85 79 90 75 100 L82 113 L96 120 L114 101 C111 95 106 90 101 88 Z' },
+  { group: 'lateralDelts', path: 'M74 98 C66 99 60 106 60 115 C60 124 67 131 79 133 L92 122 L83 114 C77 109 74 104 74 98 Z' },
   { group: 'traps', path: 'M140 82 C129 82 117 91 108 103 L124 123 L138 141 Z' },
   { group: 'upperBack', path: 'M139 119 C130 123 124 133 121 146 L124 165 L138 159 Z' },
   { group: 'triceps', path: 'M76 130 C68 135 65 147 68 159 L76 183 C79 190 87 192 92 187 L89 159 C88 150 91 142 97 136 Z' },
@@ -178,11 +179,15 @@ function MuscleShape({
 }) {
   const role = roles[region.group];
   const aggregateColor = volumeColors[volume?.status ?? 'no-stimulus'];
+  const hasStimulus = volume ? volume.performedSets > 0 : role !== 'inactive';
   const strokeColor = volume ? aggregateColor.glow : colors[role].glow;
+  const fill = volume
+    ? `url(#${volumeGradientId(id, region.group)})`
+    : `url(#${gradientId(id, role)})`;
   const transform = mirrored ? 'translate(280 0) scale(-1 1)' : undefined;
   return (
     <>
-      {(volume ? volume.status !== 'no-stimulus' : role !== 'inactive') && (
+      {hasStimulus && !volume && (
         <Path
           d={region.path}
           transform={transform}
@@ -195,7 +200,7 @@ function MuscleShape({
           onPress={onMuscleSelect ? () => onMuscleSelect(region.group) : undefined}
         />
       )}
-      {(volume ? volume.status !== 'no-stimulus' : role !== 'inactive') && (
+      {hasStimulus && !volume && (
         <Path
           d={region.path}
           transform={transform}
@@ -211,12 +216,14 @@ function MuscleShape({
       <Path
         d={region.path}
         transform={transform}
-        fill={volume ? `url(#${volumeGradientId(id, region.group)})` : `url(#${gradientId(id, role)})`}
-        stroke="#18211B"
+        fill={fill}
+        stroke={selected ? '#E8FFAA' : '#18211B'}
         strokeOpacity={0.92}
-        strokeWidth={1.15}
+        strokeWidth={selected ? 2.2 : 1.15}
         strokeLinejoin="round"
-        accessibilityLabel={volume ? `${volume.name}: ${volume.performedSets} wykonanych serii, status: ${volume.status}` : undefined}
+        accessibilityLabel={volume
+          ? `${volume.name}: ${volume.performedSets} wykonanych serii, status: ${volume.status}`
+          : undefined}
         onPress={onMuscleSelect ? () => onMuscleSelect(region.group) : undefined}
       />
     </>
@@ -248,6 +255,7 @@ export function MuscleEngagementMap({
   const leg = 'M109 249 C98 254 94 269 96 287 L103 346 C105 362 112 372 123 373 C133 371 138 362 139 349 L139 267 C131 255 120 249 109 249 Z M113 374 C105 382 104 396 106 412 L111 449 C112 460 109 471 105 481 L139 481 C135 468 136 452 137 439 L139 376 C130 369 121 369 113 374 Z';
   const torso = 'M116 69 L116 81 C106 83 96 87 86 94 C75 94 68 100 65 110 C62 122 70 134 81 140 L92 151 L91 218 C92 232 101 241 111 247 L169 247 C179 241 188 232 189 218 L188 151 L199 140 C210 134 218 122 215 110 C212 100 205 94 194 94 C184 87 174 83 164 81 L164 69 Z';
   const halfRegions = regions.filter((region) => region.group !== 'chest' || view === 'front');
+  const lateralDeltsPath = halfRegions.find((region) => region.group === 'lateralDelts')?.path;
 
   const gradient = (role: MuscleRole) => (
     <LinearGradient id={gradientId(id, role)} x1="0" y1="0" x2="0.8" y2="1">
@@ -368,6 +376,27 @@ export function MuscleEngagementMap({
           <Path d="M140 83 L140 230 M116 99 C124 117 130 132 137 145 M164 99 C156 117 150 132 143 145 M100 172 C110 184 121 190 135 192 M180 172 C170 184 159 190 145 192 M108 261 C118 270 129 272 138 270 M172 261 C162 270 151 272 142 270 M113 324 C121 333 130 335 138 331 M167 324 C159 333 150 335 142 331 M121 401 C127 394 133 393 138 398 M159 401 C153 394 147 393 142 398" fill="none" stroke="#A5B0A7" strokeOpacity={0.34} strokeWidth={1.2} />
         )}
         <Path d="M70 144 L80 178 M210 144 L200 178 M116 475 L138 475 M164 475 L142 475" fill="none" stroke="#859188" strokeOpacity={0.48} strokeWidth={1.1} strokeLinecap="round" />
+        {lateralDeltsPath ? (
+          <>
+            <Path
+              d={lateralDeltsPath}
+              fill="transparent"
+              stroke="transparent"
+              strokeWidth={14}
+              pointerEvents="auto"
+              onPress={onMuscleSelect ? () => onMuscleSelect('lateralDelts') : undefined}
+            />
+            <Path
+              d={lateralDeltsPath}
+              transform="translate(280 0) scale(-1 1)"
+              fill="transparent"
+              stroke="transparent"
+              strokeWidth={14}
+              pointerEvents="auto"
+              onPress={onMuscleSelect ? () => onMuscleSelect('lateralDelts') : undefined}
+            />
+          </>
+        ) : null}
         </Svg>
       </View>
     </View>

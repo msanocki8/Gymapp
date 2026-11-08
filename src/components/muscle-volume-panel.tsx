@@ -3,22 +3,26 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ViewStyle } from 'react-native';
 
+import { muscleVolumeColors } from '@/constants/muscle-volume';
 import { BodyView, MuscleEngagementMap } from '@/components/muscle-engagement-map';
 import type { AnalysisPeriod, MuscleId, MuscleStatus, MuscleVolume } from '@/lib/muscle-volume';
 
 const statusLabels: Record<MuscleStatus, string> = {
-	'no-stimulus': 'Brak serii głównych',
+	'no-stimulus': 'Brak wykonanych serii',
 	below: 'Niska objętość',
 	'in-range': 'W zakresie',
 	warning: 'Wysoka objętość',
 };
 
 const statusColors: Record<MuscleStatus, string> = {
-	'no-stimulus': '#738078',
-	below: '#69A8FF',
-	'in-range': '#79DD20',
-	warning: '#FF7474',
+	...muscleVolumeColors,
 };
+const frontMuscles = new Set<MuscleId>([
+	'chest', 'upperChest', 'frontDelts', 'biceps', 'quads', 'abs', 'obliques',
+]);
+const backMuscles = new Set<MuscleId>([
+	'lats', 'upperBack', 'traps', 'lowerBack', 'rearDelts', 'triceps', 'glutes', 'hamstrings',
+]);
 
 type CrossPlatformShadowStyle = ViewStyle & { boxShadow?: string };
 
@@ -50,8 +54,11 @@ export function MuscleVolumePanel({
 	onPeriodChange: (period: AnalysisPeriod) => void;
 	period: AnalysisPeriod;
 }) {
-	const [bodyView, setBodyView] = useState<BodyView>('front');
+	const [manualBodyView, setManualBodyView] = useState<BodyView | null>(null);
 	const [selectedMuscleId, setSelectedMuscleId] = useState<MuscleId>('chest');
+	const frontCount = volumes.filter((muscle) => frontMuscles.has(muscle.muscleId) && muscle.performedSets > 0).length;
+	const backCount = volumes.filter((muscle) => backMuscles.has(muscle.muscleId) && muscle.performedSets > 0).length;
+	const bodyView = manualBodyView ?? (backCount > frontCount ? 'back' : 'front');
 	const selected = volumes.find((muscle) => muscle.muscleId === selectedMuscleId) ?? volumes[0];
 	const selectedSession = sessionVolumes.find((muscle) => muscle.muscleId === selected?.muscleId);
 	const selectedWeek = weeklyVolumes.find((muscle) => muscle.muscleId === selected?.muscleId);
@@ -79,7 +86,10 @@ export function MuscleVolumePanel({
 								key={item}
 								accessibilityRole="tab"
 								accessibilityState={{ selected: isSelected }}
-								onPress={() => onPeriodChange(item)}
+								onPress={() => {
+									setManualBodyView(null);
+									onPeriodChange(item);
+								}}
 								style={[styles.periodButton, isSelected && styles.periodButtonSelected]}>
 								<Text style={[styles.periodText, isSelected && styles.periodTextSelected]}>
 									{item === 'session' ? 'Sesja' : 'Tydzień'}
@@ -92,23 +102,28 @@ export function MuscleVolumePanel({
 
 			<Text style={styles.disclaimer}>
 				{period === 'session'
-					? 'Tylko bieżący trening. Serie pomocnicze liczymy jako 0,5 serii.'
-					: 'Suma wykonanych serii z bieżącego tygodnia. Serie pomocnicze liczymy jako 0,5 serii.'}
+					? 'Wynik uwzględnia serie główne (1,0) i pomocnicze (0,5).'
+					: 'Suma ważonych serii w bieżącym tygodniu.'}
 			</Text>
+			{volumes.every((muscle) => muscle.performedSets === 0) ? (
+				<Text style={styles.emptyHint}>
+					Zaznacz serię jako wykonaną, aby podświetlić mięśnie zaangażowane w trening.
+				</Text>
+			) : null}
 			<View style={styles.summaryGrid}>
 				{period === 'session' ? (
 					<>
 						<SummaryItem label="Niska objętość" count={belowCount} color={statusColors.below} />
 						<SummaryItem label="W zakresie" count={inRangeCount} color={statusColors['in-range']} />
 						<SummaryItem label="Wysoka objętość" count={warningCount} color={statusColors.warning} />
-						<SummaryItem label="Brak serii głównych" count={noStimulusCount} color={statusColors['no-stimulus']} />
+						<SummaryItem label="Bez serii" count={noStimulusCount} color={statusColors['no-stimulus']} />
 					</>
 				) : (
 					<>
 						<SummaryItem label="W zakresie" count={inRangeCount} color={statusColors['in-range']} />
 						<SummaryItem label="Poniżej celu" count={belowCount} color={statusColors.below} />
 						<SummaryItem label="Wysoka objętość" count={warningCount} color={statusColors.warning} />
-						<SummaryItem label="Brak serii głównych" count={noStimulusCount} color={statusColors['no-stimulus']} />
+						<SummaryItem label="Bez serii" count={noStimulusCount} color={statusColors['no-stimulus']} />
 					</>
 				)}
 			</View>
@@ -119,21 +134,21 @@ export function MuscleVolumePanel({
 						<LegendItem color={statusColors.below} label="Niska objętość sesji" />
 						<LegendItem color={statusColors['in-range']} label="Zakres sesji" />
 						<LegendItem color={statusColors.warning} label="Wysoka objętość sesji" />
-						<LegendItem color={statusColors['no-stimulus']} label="Brak serii głównych" />
+						<LegendItem color={statusColors['no-stimulus']} label="Bez serii" />
 					</>
 				) : (
 					<>
 						<LegendItem color={statusColors['in-range']} label="W zakresie" />
 						<LegendItem color={statusColors.below} label="Poniżej zakresu" />
 						<LegendItem color={statusColors.warning} label="Wysoka objętość" />
-						<LegendItem color={statusColors['no-stimulus']} label="Brak serii głównych" />
+						<LegendItem color={statusColors['no-stimulus']} label="Bez serii" />
 					</>
 				)}
 			</View>
 
 			<MuscleEngagementMap
 				view={bodyView}
-				onViewChange={setBodyView}
+				onViewChange={setManualBodyView}
 				volumes={volumes}
 				selectedMuscleId={selected?.muscleId ?? selectedMuscleId}
 				onMuscleSelect={setSelectedMuscleId}
@@ -156,16 +171,11 @@ export function MuscleVolumePanel({
 						<CountStat label="TYDZIEŃ" value={selectedWeek?.performedSets ?? 0} />
 					</View>
 					<Text style={styles.rangeText}>
-						{period === 'session' ? 'Zakres orientacyjny sesji' : 'Zakres orientacyjny tygodnia'}: {formatSets(selected.range.preferredMin)}–{formatSets(selected.range.preferredMax)} serii · wysoka objętość od {formatSets(selected.range.warningFrom)}
+						{period === 'session' ? 'Zakres orientacyjny sesji' : 'Zakres orientacyjny tygodnia'}: {formatSets(selected.range.preferredMin)}–{formatSets(selected.range.preferredMax)} ważonych serii · wysoka objętość od {formatSets(selected.range.warningFrom)}
 					</Text>
 					<Text style={[styles.statusExplanation, { color: statusColors[selected.status] }]}>
 						{getStatusExplanation(selected, period)}
 					</Text>
-					{selected.hasAuxiliaryStimulus ? (
-						<Text style={styles.auxiliaryNote}>
-							Każda wykonana seria z udziałem pomocniczym dodaje 0,5 serii tej partii.
-						</Text>
-					) : null}
 				</View>
 			) : null}
 			<Text style={styles.referenceNote}>Zakresy orientacyjne. Próg nie jest diagnozą przetrenowania.</Text>
@@ -178,9 +188,7 @@ function getStatusExplanation(muscle: MuscleVolume, period: AnalysisPeriod) {
 	const sets = formatSets(muscle.performedSets);
 	if (period === 'session') {
 		if (muscle.status === 'no-stimulus') {
-			return muscle.hasAuxiliaryStimulus
-				? `0 serii głównych ${scope}; partia była zaangażowana pomocniczo.`
-				: `Brak wykonanych serii przypisanych do tej partii ${scope}.`;
+			return `Brak wykonanych serii przypisanych do tej partii ${scope}.`;
 		}
 		if (muscle.performedSets > 0) {
 			return `${muscle.performedSets === 1 ? '1 seria' : `${sets} serii`} ${scope}. Sama liczba serii nie pozwala ocenić jakości bodźca.`;
@@ -201,7 +209,7 @@ function getStatusExplanation(muscle: MuscleVolume, period: AnalysisPeriod) {
 function CountStat({ label, value }: { label: string; value: number }) {
 	return (
 		<View style={styles.countStat}>
-			<Text style={styles.setCountValue}>{formatSets(value)}</Text>
+			<Text style={styles.setCountValue}>{value}</Text>
 			<Text style={styles.setCountLabel}>{label}</Text>
 		</View>
 	);
@@ -247,6 +255,7 @@ const styles = StyleSheet.create({
 	periodText: { color: '#89958B', fontSize: 11, fontWeight: '700' },
 	periodTextSelected: { color: '#C5FF68' },
 	disclaimer: { color: '#879188', fontSize: 11, lineHeight: 16, marginTop: 7 },
+	emptyHint: { color: '#A6B0A7', fontSize: 11, lineHeight: 16, marginTop: 8 },
 	summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 14 },
 	summaryItem: { minWidth: '47%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 11, borderColor: '#28312A', borderWidth: 1, backgroundColor: '#0C110D', paddingHorizontal: 9, paddingVertical: 8 },
 	summaryDot: { width: 7, height: 7, borderRadius: 4 },
@@ -270,6 +279,5 @@ const styles = StyleSheet.create({
 	setCountLabel: { color: '#AAB5AA', fontSize: 8, fontWeight: '800', letterSpacing: 0.6, flexShrink: 1 },
 	rangeText: { color: '#AAB5AA', fontSize: 10, lineHeight: 15, marginTop: 6 },
 	statusExplanation: { fontSize: 10, lineHeight: 15, marginTop: 6 },
-	auxiliaryNote: { color: '#8FA99A', fontSize: 10, lineHeight: 15, marginTop: 6 },
 	referenceNote: { color: '#758078', fontSize: 9, lineHeight: 14, marginTop: 12 },
 });

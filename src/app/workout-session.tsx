@@ -2,28 +2,34 @@ import { useLocalSearchParams, usePreventRemove, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import type { ViewStyle } from 'react-native';
+import { SymbolView } from 'expo-symbols';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
-  FadeIn,
-  FadeInDown,
-  FadeOut,
-  LinearTransition,
-  ReduceMotion,
+  Extrapolation,
+  interpolate,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
-
+import { scheduleOnRN } from 'react-native-worklets';
+import type { ViewStyle } from 'react-native';
 import { ExerciseDetailModal } from '@/components/exercise-detail-modal';
 import { ExercisePickerModal } from '@/components/exercise-picker-modal';
 import { MuscleVolumePanel } from '@/components/muscle-volume-panel';
-import { WorkoutCard, WorkoutHeader, WorkoutScreen, WorkoutButton, workoutColors, workoutStyles } from '@/components/workout-ui';
+import { WorkoutHeader, WorkoutScreen, WorkoutButton, workoutColors, workoutStyles } from '@/components/workout-ui';
 import { exerciseLibrary, Exercise } from '@/constants/exercise-library';
 import { WorkoutExerciseConfig, WorkoutPlan, useGymApp } from '@/hooks/use-gym-app';
 import { AnalysisPeriod, areAllSetsCompleted, calculateMuscleVolume, getLocalWeekKey, VolumeExercise } from '@/lib/muscle-volume';
 
 const DEFAULT_SETS_PER_EXERCISE = 3;
 const DEFAULT_REST_SECONDS = 90;
-const sessionCardGradient = ['rgba(22, 31, 22, 0.98)', 'rgba(12, 17, 14, 0.98)'] as const;
-const completedCardGradient = ['rgba(29, 63, 40, 0.98)', 'rgba(13, 28, 18, 0.98)'] as const;
+const sessionCardGradient = ['rgba(34, 197, 94, 0.08)', 'rgba(5, 10, 7, 0.98)'] as const;
+const completedCardGradient = ['rgba(74, 222, 128, 0.14)', 'rgba(8, 24, 14, 0.98)'] as const;
+const seriesRowGradient = ['rgba(34, 197, 94, 0.12)', 'rgba(5, 10, 7, 0.18)'] as const;
+const seriesFieldGradient = ['rgba(255, 255, 255, 0.045)', 'rgba(0, 0, 0, 0.18)'] as const;
 const seriesButtonGlow: ViewStyle & { boxShadow?: string } = Platform.select({
   web: { boxShadow: '0 5px 18px rgba(34, 197, 94, 0.3)' },
   default: {
@@ -32,6 +38,16 @@ const seriesButtonGlow: ViewStyle & { boxShadow?: string } = Platform.select({
     shadowOpacity: 0.32,
     shadowRadius: 12,
     elevation: 5,
+  },
+}) ?? {};
+const exerciseCardGlow: ViewStyle & { boxShadow?: string } = Platform.select({
+  web: { boxShadow: '0 0 20px rgba(16, 185, 129, 0.2)' },
+  default: {
+    shadowColor: '#10b981',
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
   },
 }) ?? {};
 const EMPTY_PLAN: WorkoutPlan = {
@@ -236,6 +252,7 @@ function createSessionDraft(plan: { id: string; exercises: string[]; exerciseCon
 }
 
 export default function WorkoutSessionScreen() {
+  const { height: windowHeight } = useWindowDimensions();
   const router = useRouter();
   const { planId } = useLocalSearchParams<{ planId?: string }>();
   const { plans, sessions, recordSession } = useGymApp();
@@ -243,15 +260,16 @@ export default function WorkoutSessionScreen() {
   const [draftsByPlan, setDraftsByPlan] = useState<Record<string, SessionDraft>>({});
   const [draftLoadedPlanId, setDraftLoadedPlanId] = useState<string | null>(null);
   const [draftStorageError, setDraftStorageError] = useState<string | null>(null);
-  const draftsByPlanRef = useRef(draftsByPlan);
+  const [draftLoadAttempt, setDraftLoadAttempt] = useState(0);
   const draftWriteQueue = useRef<Promise<void>>(Promise.resolve());
-  const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestDraftToPersist = useRef<{ planId: string; draft: SessionDraft } | null>(null);
+  const draftsByPlanRef = useRef(draftsByPlan);
   const completedDraftPlanIds = useRef(new Set<string>());
   const [isEditingExercises, setIsEditingExercises] = useState(false);
   const [isExercisePickerVisible, setIsExercisePickerVisible] = useState(false);
   const [customExercises, setCustomExercises] = useState<Exercise[]>([]);
   const [recentExerciseIds, setRecentExerciseIds] = useState<string[]>([]);
-  const [expandedExerciseName, setExpandedExerciseName] = useState<string | null>(null);
+  const [expandedExerciseIndex, setExpandedExerciseIndex] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [analysisWeekKey, setAnalysisWeekKey] = useState(() => {
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -260,12 +278,116 @@ export default function WorkoutSessionScreen() {
   const [restRemainingSeconds, setRestRemainingSeconds] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [restCardBottom, setRestCardBottom] = useState(Number.POSITIVE_INFINITY);
+  const [isMuscleSheetOpen, setIsMuscleSheetOpen] = useState(false);
+  const muscleSheetHeight = windowHeight * 0.85;
+  const muscleSheetOffset = useSharedValue(0);
+  const muscleSheetScrollOffset = useSharedValue(0);
+  const muscleSheetDragStartedAtTop = useSharedValue(false);
   const [selectedDetail, setSelectedDetail] = useState<Exercise | null>(null);
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null);
   const [keypadValue, setKeypadValue] = useState('');
   const [analysisPeriod, setAnalysisPeriod] = useState<AnalysisPeriod>('session');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const openMuscleSheet = () => {
+    muscleSheetOffset.set(0);
+    muscleSheetScrollOffset.set(0);
+    setIsMuscleSheetOpen(true);
+  };
+  const closeMuscleSheet = () => setIsMuscleSheetOpen(false);
+  const muscleSheetScrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      muscleSheetScrollOffset.set(event.contentOffset.y);
+    },
+  });
+  const muscleSheetAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: muscleSheetOffset.get() }],
+  }));
+  const muscleSheetBackdropStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      muscleSheetOffset.get(),
+      [0, muscleSheetHeight],
+      [1, 0],
+      Extrapolation.CLAMP,
+    ),
+  }));
+  const createMuscleSheetPan = (onlyWhenScrollIsAtTop = false) => {
+    const pan = Gesture.Pan()
+      .activeOffsetY(6)
+      .failOffsetY([-10000, -6])
+      .failOffsetX([-24, 24]);
+
+    if (onlyWhenScrollIsAtTop) {
+      pan.onBegin(() => {
+        'worklet';
+        muscleSheetDragStartedAtTop.set(muscleSheetScrollOffset.get() <= 1);
+      });
+    }
+
+    pan
+      .onUpdate((event) => {
+        'worklet';
+        if (!onlyWhenScrollIsAtTop || muscleSheetDragStartedAtTop.get()) {
+          muscleSheetOffset.set(Math.max(0, event.translationY));
+        }
+      })
+      .onEnd((event) => {
+        'worklet';
+        if (onlyWhenScrollIsAtTop && !muscleSheetDragStartedAtTop.get()) {
+          return;
+        }
+
+        if (muscleSheetOffset.get() > 120 || event.velocityY > 800) {
+          muscleSheetOffset.set(
+            withTiming(muscleSheetHeight + 48, { duration: 220 }, (finished) => {
+              'worklet';
+              if (finished) {
+                scheduleOnRN(closeMuscleSheet);
+              }
+            }),
+          );
+          return;
+        }
+
+        muscleSheetOffset.set(
+          withSpring(0, { damping: 30, stiffness: 300, overshootClamping: true }),
+        );
+      })
+      .onFinalize((_event, success) => {
+        'worklet';
+        if (!success && muscleSheetOffset.get() > 0) {
+          muscleSheetOffset.set(
+            withSpring(0, { damping: 30, stiffness: 300, overshootClamping: true }),
+          );
+        }
+      });
+
+    return pan;
+  };
+  const muscleSheetHeaderPan = createMuscleSheetPan();
+  const muscleSheetContentPan = createMuscleSheetPan(true);
+  const muscleSheetNativeScroll = Gesture.Native();
+  const muscleSheetHeaderContent = (
+    <View>
+      <View style={styles.muscleSheetHandle}>
+        <View style={styles.muscleSheetGrabber} />
+      </View>
+      <View style={styles.muscleSheetHeader}>
+        <Text style={styles.muscleSheetTitle}>Anatomia i trening</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Zamknij analizę mięśni"
+          onPress={closeMuscleSheet}
+          style={styles.muscleSheetClose}>
+          <SymbolView
+            name={{ ios: 'xmark', android: 'close', web: 'close' }}
+            size={16}
+            tintColor="#F5F7F2"
+          />
+        </Pressable>
+      </View>
+    </View>
+  );
   const startedAt = useRef<number | null>(null);
   const restDeadline = useRef<number | null>(null);
   const allowExitRef = useRef(false);
@@ -275,8 +397,113 @@ export default function WorkoutSessionScreen() {
   const restDeadlineKey = planId ? `gymapp:workout-rest:${planId}` : null;
   const activePlan = plan ?? EMPTY_PLAN;
 
+  function enqueueDraftStorageOperation(operation: () => Promise<void>) {
+    const queuedOperation = draftWriteQueue.current.then(operation);
+    draftWriteQueue.current = queuedOperation.catch((error: unknown) => {
+      console.error('Nie udało się zapisać szkicu treningu.', error);
+    });
+    return queuedOperation;
+  }
+
+  useEffect(() => {
+    draftsByPlanRef.current = draftsByPlan;
+  }, [draftsByPlan]);
+
+  useEffect(() => {
+    if (!plan || !planId) return;
+    let isActive = true;
+    void readStoredDraft(plan.id)
+      .then((storedDraft) => {
+        if (!isActive) return;
+        completedDraftPlanIds.current.delete(plan.id);
+        const draft = draftsByPlanRef.current[plan.id] ?? storedDraft ?? createSessionDraft(plan);
+        setDraftsByPlan((current) => current[plan.id]
+          ? current
+          : { ...current, [plan.id]: draft });
+        setDraftStorageError(null);
+        setDraftLoadedPlanId(plan.id);
+      })
+      .catch((error: unknown) => {
+        if (!isActive) return;
+        console.error('Nie udało się odczytać szkicu treningu.', error);
+        setDraftStorageError('Nie udało się odczytać zapisanego szkicu treningu.');
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [draftLoadAttempt, plan, planId]);
+
+  useEffect(() => {
+    if (!plan || draftLoadedPlanId !== plan.id) return;
+    const draft = draftsByPlan[plan.id];
+    if (!draft || completedDraftPlanIds.current.has(plan.id)) return;
+
+    const timer = setTimeout(() => {
+      if (completedDraftPlanIds.current.has(plan.id)) return;
+      void enqueueDraftStorageOperation(() => writeStoredDraft(plan.id, draft))
+        .then(() => setDraftStorageError(null))
+        .catch((error: unknown) => {
+          console.error('Nie udało się zapisać szkicu treningu.', error);
+          setDraftStorageError('Nie udało się zapisać szkicu treningu na tym urządzeniu.');
+        });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [draftLoadedPlanId, draftsByPlan, plan]);
+
+  const activeDraftForPersistence = plan && draftLoadedPlanId === plan.id
+    ? draftsByPlan[plan.id]
+    : undefined;
+  useEffect(() => {
+    latestDraftToPersist.current = activeDraftForPersistence && plan
+      ? { planId: plan.id, draft: activeDraftForPersistence }
+      : null;
+  }, [activeDraftForPersistence, plan]);
+
+  useEffect(() => () => {
+    const pendingDraft = latestDraftToPersist.current;
+    if (!pendingDraft || completedDraftPlanIds.current.has(pendingDraft.planId)) return;
+    void enqueueDraftStorageOperation(() => writeStoredDraft(pendingDraft.planId, pendingDraft.draft))
+      .catch((error: unknown) => {
+        console.error('Nie udało się zapisać szkicu treningu podczas zamykania ekranu.', error);
+      });
+  }, []);
+
+  async function discardActiveWorkoutDraft() {
+    const activePlanId = activePlan.id;
+    if (!activePlanId) return false;
+
+    const activeDraft = draftsByPlanRef.current[activePlanId] ?? draftsByPlan[activePlanId];
+    latestDraftToPersist.current = null;
+    completedDraftPlanIds.current.add(activePlanId);
+    try {
+      await enqueueDraftStorageOperation(() => deleteStoredDraft(activePlanId));
+    } catch (error) {
+      completedDraftPlanIds.current.delete(activePlanId);
+      if (activeDraft) latestDraftToPersist.current = { planId: activePlanId, draft: activeDraft };
+      console.error('Nie udało się usunąć szkicu treningu.', error);
+      setDraftStorageError('Nie udało się usunąć szkicu treningu z tego urządzenia.');
+      const message = 'Nie udało się usunąć szkicu treningu. Postęp pozostał zapisany.';
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') window.alert(message);
+      } else {
+        Alert.alert('Nie udało się usunąć treningu', message);
+      }
+      return false;
+    }
+
+    setDraftsByPlan((current) => {
+      const { [activePlanId]: _discardedDraft, ...remainingDrafts } = current;
+      return remainingDrafts;
+    });
+    setDraftLoadedPlanId(null);
+    setDraftStorageError(null);
+    return true;
+  }
+
   const disableWorkoutRemovalPrevention = usePreventRemove(Boolean(plan && !allowExit), ({ repeat }) => {
-    const leaveWorkout = () => {
+    const leaveWorkout = async () => {
+      if (!await discardActiveWorkoutDraft()) return;
       clearWorkoutTimerStorage(workoutStartKey, restDeadlineKey);
       allowExitRef.current = true;
       setAllowExit(true);
@@ -338,99 +565,16 @@ export default function WorkoutSessionScreen() {
     };
   }, [restDeadlineKey, workoutStartKey]);
 
-  useEffect(() => {
-    draftsByPlanRef.current = draftsByPlan;
-  }, [draftsByPlan]);
-
-  useEffect(() => {
-    if (!plan) return;
-    let cancelled = false;
-    const currentPlan = plan;
-    setDraftStorageError(null);
-    void readStoredDraft(currentPlan.id).then((storedDraft) => {
-      if (cancelled) return;
-      const currentDraft = draftsByPlanRef.current[currentPlan.id]
-        ?? storedDraft
-        ?? createSessionDraft(currentPlan);
-      draftsByPlanRef.current = {
-        ...draftsByPlanRef.current,
-        [currentPlan.id]: currentDraft,
-      };
-      setDraftsByPlan((current) => current[currentPlan.id]
-        ? current
-        : { ...current, [currentPlan.id]: currentDraft });
-      setDraftLoadedPlanId(currentPlan.id);
-    }).catch((error: unknown) => {
-      if (cancelled) return;
-      console.error('Failed to load workout draft:', error);
-      setDraftStorageError('Nie udało się odczytać zapisanego szkicu treningu.');
-      const currentDraft = draftsByPlanRef.current[currentPlan.id]
-        ?? createSessionDraft(currentPlan);
-      draftsByPlanRef.current = {
-        ...draftsByPlanRef.current,
-        [currentPlan.id]: currentDraft,
-      };
-      setDraftsByPlan((current) => current[currentPlan.id]
-        ? current
-        : { ...current, [currentPlan.id]: currentDraft });
-      setDraftLoadedPlanId(currentPlan.id);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [plan]);
-
   const draft = draftsByPlan[activePlan.id] ?? EMPTY_SESSION_DRAFT;
-
-  useEffect(() => {
-    if (!plan || draftLoadedPlanId !== plan.id || completedDraftPlanIds.current.has(plan.id)) return;
-    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
-    draftSaveTimer.current = setTimeout(() => {
-      draftSaveTimer.current = null;
-      draftWriteQueue.current = draftWriteQueue.current
-        .then(() => writeStoredDraft(plan.id, draft))
-        .catch((error: unknown) => {
-          console.error('Failed to save workout draft:', error);
-          setDraftStorageError('Nie udało się zapisać szkicu treningu.');
-        });
-    }, 300);
-  }, [draft, draftLoadedPlanId, plan]);
-
-  useEffect(() => {
-    if (!plan) return;
-    const currentPlanId = plan.id;
-    return () => {
-      if (draftSaveTimer.current) {
-        clearTimeout(draftSaveTimer.current);
-        draftSaveTimer.current = null;
-      }
-      if (!completedDraftPlanIds.current.has(currentPlanId)) {
-        const latestDraft = draftsByPlanRef.current[currentPlanId];
-        if (latestDraft) {
-          draftWriteQueue.current = draftWriteQueue.current
-            .then(() => writeStoredDraft(currentPlanId, latestDraft))
-            .catch((error: unknown) => {
-              console.error('Failed to save workout draft on exit:', error);
-            });
-        }
-      }
-    };
-  }, [plan]);
-
   const { exerciseConfigs, setStatuses, notes } = draft;
   const sessionExerciseNames = exerciseConfigs.map((config) => config.name);
+  const completedExercises = setStatuses.filter(areAllSetsCompleted).length;
   const setCounts = exerciseConfigs.map((config) => config.sets.length);
   const uniqueSetCounts = new Set(setCounts);
   const setSummaryLabel = uniqueSetCounts.size === 1
     ? `${setCounts[0] ?? DEFAULT_SETS_PER_EXERCISE} SERIE / ĆW.`
     : 'SERIE WG PLANU';
-  const completedExercises = setStatuses.filter(
-    areAllSetsCompleted,
-  ).length;
-  const progress = sessionExerciseNames.length > 0
-    ? (completedExercises / sessionExerciseNames.length) * 100
-    : 0;
-  const showMiniRestTimer = scrollOffset >= restCardBottom;
+  const showMiniRestTimer = restRemainingSeconds > 0 || scrollOffset >= restCardBottom;
   const previousPerformanceByExercise = useMemo(() => {
     const byId = new Map<string, WorkoutExerciseConfig['sets']>();
     const byName = new Map<string, { exerciseId?: string; sets: WorkoutExerciseConfig['sets'] }>();
@@ -479,6 +623,15 @@ export default function WorkoutSessionScreen() {
     timeZone: localTimeZone,
   }), [volumeExercises, historicalSessions, analysisWeekKey, localTimeZone]);
   const muscleVolumes = analysisPeriod === 'session' ? sessionMuscleVolumes : weeklyMuscleVolumes;
+  const muscleSheetContent = (
+    <MuscleVolumePanel
+      volumes={muscleVolumes}
+      sessionVolumes={sessionMuscleVolumes}
+      weeklyVolumes={weeklyMuscleVolumes}
+      period={analysisPeriod}
+      onPeriodChange={setAnalysisPeriod}
+    />
+  );
 
   if (!plan) {
     return (
@@ -500,27 +653,35 @@ export default function WorkoutSessionScreen() {
   if (draftLoadedPlanId !== plan.id) {
     return (
       <WorkoutScreen>
-        <WorkoutHeader eyebrow="TRENING W TOKU" onBack={requestWorkoutExit} />
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#A3E635" />
-          <Text className="mt-3 text-sm text-zinc-400">Wczytywanie szkicu treningu…</Text>
+        <View className="flex-1 items-center justify-center gap-3 px-6">
+          {draftStorageError ? (
+            <>
+              <Text accessibilityRole="alert" className="text-center text-sm text-red-200">
+                {draftStorageError}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setDraftLoadAttempt((current) => current + 1)}
+                className="rounded-xl bg-white/10 px-4 py-3 active:opacity-75">
+                <Text className="text-sm font-bold text-white">Spróbuj ponownie</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <ActivityIndicator color={workoutColors.neon} />
+              <Text className="text-sm text-white/60">Przywracanie szkicu treningu…</Text>
+            </>
+          )}
         </View>
       </WorkoutScreen>
     );
   }
 
   function updateDraft(updater: (current: SessionDraft) => SessionDraft) {
-    const updatedDraft = updater(
-      draftsByPlanRef.current[activePlan.id]
-        ?? draftsByPlan[activePlan.id]
-        ?? createSessionDraft(activePlan),
-    );
-    const updatedDrafts = {
-      ...draftsByPlanRef.current,
-      [activePlan.id]: updatedDraft,
-    };
-    draftsByPlanRef.current = updatedDrafts;
-    setDraftsByPlan(updatedDrafts);
+    setDraftsByPlan((current) => ({
+      ...current,
+      [activePlan.id]: updater(current[activePlan.id] ?? createSessionDraft(activePlan)),
+    }));
   }
 
   function setRestTimer(seconds: number) {
@@ -567,8 +728,7 @@ export default function WorkoutSessionScreen() {
   }
 
   function removeExercise(index: number) {
-    const exerciseName = exerciseConfigs[index]?.name;
-    if (!exerciseName) return;
+    if (!exerciseConfigs[index]) return;
     if (exerciseConfigs.length <= 1) {
       const message = 'Trening musi zawierać co najmniej jedno ćwiczenie.';
       if (Platform.OS === 'web') {
@@ -583,7 +743,10 @@ export default function WorkoutSessionScreen() {
       exerciseConfigs: current.exerciseConfigs.filter((_, currentIndex) => currentIndex !== index),
       setStatuses: current.setStatuses.filter((_, currentIndex) => currentIndex !== index),
     }));
-    setExpandedExerciseName((current) => current === exerciseName ? null : current);
+    setExpandedExerciseIndex((current) => {
+      if (current === null || current === index) return null;
+      return current > index ? current - 1 : current;
+    });
     setKeypadTarget(null);
   }
 
@@ -604,11 +767,16 @@ export default function WorkoutSessionScreen() {
 
       return { ...current, exerciseConfigs, setStatuses };
     });
+    setExpandedExerciseIndex((current) => {
+      if (current === index) return targetIndex;
+      if (current === targetIndex) return index;
+      return current;
+    });
     setKeypadTarget(null);
   }
 
-  function toggleExercise(exerciseName: string) {
-    setExpandedExerciseName((current) => current === exerciseName ? null : exerciseName);
+  function toggleExercise(index: number) {
+    setExpandedExerciseIndex((current) => current === index ? null : index);
   }
 
   function openExerciseDetails(exerciseIndex: number) {
@@ -723,21 +891,24 @@ export default function WorkoutSessionScreen() {
         notes,
       );
       completedDraftPlanIds.current.add(activePlan.id);
-      if (draftSaveTimer.current) {
-        clearTimeout(draftSaveTimer.current);
-        draftSaveTimer.current = null;
-      }
-      await draftWriteQueue.current;
       try {
-        await deleteStoredDraft(activePlan.id);
+        await enqueueDraftStorageOperation(() => deleteStoredDraft(activePlan.id));
+        setDraftStorageError(null);
       } catch (error) {
-        console.error('Failed to delete completed workout draft:', error);
-        setDraftStorageError('Trening zapisano, ale nie udało się usunąć jego szkicu.');
+        console.error('Trening zapisano, ale nie udało się usunąć zapisanego szkicu.', error);
+        const message = 'Trening zapisano, ale nie udało się usunąć jego szkicu z pamięci urządzenia.';
+        if (Platform.OS === 'web') {
+          if (typeof window !== 'undefined') window.alert(message);
+        } else {
+          Alert.alert('Trening zapisany', message);
+        }
       }
-      const remainingDrafts = { ...draftsByPlanRef.current };
-      delete remainingDrafts[activePlan.id];
-      draftsByPlanRef.current = remainingDrafts;
-      setDraftsByPlan(remainingDrafts);
+      latestDraftToPersist.current = null;
+      setDraftsByPlan((current) => {
+        const { [activePlan.id]: _removedDraft, ...remainingDrafts } = current;
+        return remainingDrafts;
+      });
+      setDraftLoadedPlanId(null);
       clearWorkoutTimerStorage(workoutStartKey, restDeadlineKey);
       allowExitRef.current = true;
       setAllowExit(true);
@@ -758,7 +929,8 @@ export default function WorkoutSessionScreen() {
   }
 
   function requestWorkoutExit() {
-    confirmWorkoutExit(() => {
+    confirmWorkoutExit(async () => {
+      if (!await discardActiveWorkoutDraft()) return;
       clearWorkoutTimerStorage(workoutStartKey, restDeadlineKey);
       allowExitRef.current = true;
       setAllowExit(true);
@@ -794,18 +966,76 @@ export default function WorkoutSessionScreen() {
 
   return (
     <WorkoutScreen>
-      <WorkoutHeader eyebrow="TRENING W TOKU" onBack={requestWorkoutExit} />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboard}>
-      <ScrollView
-        className="min-w-0 flex-1"
-        contentContainerStyle={[workoutStyles.scrollContent, styles.sessionScrollContent]}
-        keyboardShouldPersistTaps="handled"
-        onScroll={(event) => setScrollOffset(event.nativeEvent.contentOffset.y)}
-        scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}>
-        <View className="mt-3 w-full min-w-0">
+    <View className="min-w-0 flex-row items-center gap-3 px-5" style={styles.sessionHeader}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Wróć"
+        onPress={requestWorkoutExit}
+        className="items-center justify-center rounded-full border border-white/15 bg-black/35 active:opacity-75"
+        style={styles.sessionBackButton}>
+        <SymbolView
+          name={{ ios: 'arrow.left', android: 'arrow_back', web: 'arrow_back' }}
+          size={17}
+          tintColor="#A3E635"
+        />
+      </Pressable>
+      <View className="min-w-0 flex-1">
+        <Text style={styles.sessionHeaderEyebrow}>
+          TRENING W TOKU
+        </Text>
+        <Text style={styles.sessionHeaderVersion}>
+          WERSJA 0.0.10
+        </Text>
+      </View>
+    </View>
+    <View style={styles.sessionActionBar}>
+      <View
+        accessibilityLabel={`Czas treningu ${formatElapsed(elapsedSeconds)}`}
+        style={styles.sessionTimerPill}>
+        <View style={styles.timerIndicator} />
+        <Text style={styles.sessionTimerText}>{formatElapsed(elapsedSeconds)}</Text>
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Zakończ i zapisz trening"
+        accessibilityState={{ disabled: isSaving }}
+        disabled={isSaving}
+        onPress={finishWorkout}
+        style={({ pressed }) => [
+          styles.finishWorkoutButton,
+          isSaving && styles.finishWorkoutButtonDisabled,
+          pressed && !isSaving && styles.finishWorkoutButtonPressed,
+        ]}>
+        <LinearGradient
+          colors={['#22C55E', '#A3E635']}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={styles.finishWorkoutGradient}>
+          <SymbolView
+            name={{ ios: 'checkmark', android: 'check', web: 'check' }}
+            size={20}
+            tintColor="#080B09"
+          />
+        </LinearGradient>
+      </Pressable>
+    </View>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={styles.keyboard}>
+    <ScrollView
+      className="min-w-0 flex-1"
+      contentContainerStyle={[workoutStyles.scrollContent, styles.sessionScrollContent]}
+      keyboardShouldPersistTaps="handled"
+      onScroll={(event) => setScrollOffset(event.nativeEvent.contentOffset.y)}
+      scrollEventThrottle={16}
+      showsVerticalScrollIndicator={false}>
+      {saveError ? (
+        <Text accessibilityRole="alert" style={styles.saveError}>{saveError}</Text>
+      ) : null}
+      {draftStorageError ? (
+        <Text accessibilityRole="alert" style={styles.saveError}>{draftStorageError}</Text>
+      ) : null}
+    <View className="mt-3 w-full min-w-0">
           <View className="mb-2 flex-row items-center" style={styles.heroEyebrow}>
             <View className="rounded-full bg-lime-400" style={styles.heroIndicator} />
             <Text style={styles.heroEyebrowText}>AKTYWNY PLAN</Text>
@@ -818,97 +1048,64 @@ export default function WorkoutSessionScreen() {
           </Text>
         </View>
 
-        <WorkoutCard
-          className="rounded-3xl border border-zinc-800/80 bg-zinc-900/80"
-          gradientColors={sessionCardGradient}
-          glow
-          animationDuration={170}
-          animationOffset={5}
-          style={styles.progressCard}>
-          <View style={styles.progressTop}>
-            <View className="min-w-0 flex-1 shrink" style={styles.progressCopy}>
-              <Text style={styles.progressCaption}>POSTĘP TRENINGU</Text>
-              <View className="w-full min-w-0 flex-row flex-wrap items-baseline" style={styles.progressCountRow}>
-                <Text className="shrink" style={styles.progressCount} maxFontSizeMultiplier={1.15}>
-                  {completedExercises}
-                  <Text style={styles.progressTotal}> / {sessionExerciseNames.length}</Text>
-                </Text>
-                <Text className="shrink" style={styles.progressUnit}>ćwiczeń</Text>
-              </View>
-            </View>
-            <View className="shrink-0" style={styles.timer}>
-              <View style={styles.timerHeading}>
-                <View className="rounded-full bg-lime-400" style={styles.timerIndicator} />
-                <Text style={styles.timerCaption}>CZAS TRENINGU</Text>
-              </View>
-              <Text style={styles.timerText}>{formatElapsed(elapsedSeconds)}</Text>
-            </View>
-          </View>
-          <View
-            accessibilityRole="progressbar"
-            accessibilityValue={{ min: 0, max: 100, now: progress }}
-            className="overflow-hidden rounded-full bg-zinc-800"
-            style={styles.progressTrack}>
-            <View className="h-full rounded-full bg-lime-400" style={[styles.progressFill, { width: `${progress}%` }]} />
-          </View>
-        </WorkoutCard>
-
         <View
           onLayout={(event) => {
             const { y, height } = event.nativeEvent.layout;
             setRestCardBottom(y + height);
           }}>
-          <WorkoutCard
-            className="rounded-3xl border border-zinc-800/80 bg-zinc-900/80"
-            gradientColors={sessionCardGradient}
-            glow
-            animationDuration={170}
-            animationOffset={5}
+          <View
+            className="min-w-0 overflow-hidden rounded-3xl border border-zinc-800/80 bg-zinc-900/80"
             style={styles.restCard}>
-            <View style={styles.restHeader}>
-              <View className="min-w-0">
-                <Text style={styles.restEyebrow}>ODPOCZYNEK MIĘDZY SERIAMI</Text>
-                <Text style={styles.restTime}>{restRemainingSeconds > 0 ? formatElapsed(restRemainingSeconds) : 'Gotowy'}</Text>
+            <LinearGradient
+              colors={sessionCardGradient}
+              style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}
+            />
+            <View style={styles.restCardContent}>
+              <View style={styles.restHeader}>
+                <View className="min-w-0">
+                  <Text style={styles.restEyebrow}>ODPOCZYNEK MIĘDZY SERIAMI</Text>
+                  <Text style={styles.restTime}>{restRemainingSeconds > 0 ? formatElapsed(restRemainingSeconds) : 'Gotowy'}</Text>
+                </View>
+                <Text style={styles.restHint}>
+                  {restRemainingSeconds > 0 ? 'CZAS DO KOŃCA' : 'GOTOWY DO KOLEJNEJ SERII'}
+                </Text>
               </View>
-              <Text style={styles.restHint}>
-                {restRemainingSeconds > 0 ? 'CZAS DO KOŃCA' : 'GOTOWY DO KOLEJNEJ SERII'}
-              </Text>
+              <View style={styles.restActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={restRemainingSeconds > 0 ? 'Zatrzymaj timer odpoczynku' : 'Rozpocznij 90-sekundowy odpoczynek'}
+                  onPress={() => setRestTimer(getRestTimerRemaining() > 0 ? 0 : DEFAULT_REST_SECONDS)}
+                  className="active:opacity-80"
+                  style={[styles.startSeriesPressable, seriesButtonGlow, restRemainingSeconds > 0 && styles.stopRestButton]}>
+                  <LinearGradient
+                    colors={restRemainingSeconds > 0
+                      ? ['rgba(163,230,53,0.18)', 'rgba(34,197,94,0.1)']
+                      : ['#22C55E', '#A3E635']}
+                    start={{ x: 0, y: 0.5 }}
+                    end={{ x: 1, y: 0.5 }}
+                    style={styles.startSeriesButton}>
+                    {restRemainingSeconds > 0 ? (
+                      <Text style={styles.stopRestText}>ZATRZYMAJ TIMER</Text>
+                    ) : (
+                      <>
+                        <Text style={styles.startSeriesIcon}>▶</Text>
+                        <Text style={styles.startSeriesText}>ROZPOCZNIJ SERIĘ</Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Dodaj 15 sekund odpoczynku"
+                  onPress={() => setRestTimer(getRestTimerRemaining() + 15)}
+                  className="rounded-xl border border-zinc-700 bg-zinc-950 active:opacity-75"
+                  style={styles.addRestTimeButton}>
+                  <Text style={styles.addRestTimeText}>+15s</Text>
+                </Pressable>
+              </View>
             </View>
-            <View style={styles.restActions}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={restRemainingSeconds > 0 ? 'Zatrzymaj timer odpoczynku' : 'Rozpocznij 90-sekundowy odpoczynek'}
-                onPress={() => setRestTimer(getRestTimerRemaining() > 0 ? 0 : DEFAULT_REST_SECONDS)}
-                className="active:opacity-80"
-                style={[styles.startSeriesButton, seriesButtonGlow, restRemainingSeconds > 0 && styles.stopRestButton]}>
-                {restRemainingSeconds > 0 ? (
-                  <Text style={styles.stopRestText}>ZATRZYMAJ TIMER</Text>
-                ) : (
-                  <>
-                    <Text style={styles.startSeriesIcon}>▶</Text>
-                    <Text style={styles.startSeriesText}>ROZPOCZNIJ SERIĘ</Text>
-                  </>
-                )}
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Dodaj 15 sekund odpoczynku"
-                onPress={() => setRestTimer(getRestTimerRemaining() + 15)}
-                className="rounded-xl border border-zinc-700 bg-zinc-950 active:opacity-75"
-                style={styles.addRestTimeButton}>
-                <Text style={styles.addRestTimeText}>+15s</Text>
-              </Pressable>
-            </View>
-          </WorkoutCard>
+          </View>
         </View>
-
-        <MuscleVolumePanel
-          volumes={muscleVolumes}
-          sessionVolumes={sessionMuscleVolumes}
-          weeklyVolumes={weeklyMuscleVolumes}
-          period={analysisPeriod}
-          onPeriodChange={setAnalysisPeriod}
-        />
 
         <View className="w-full min-w-0 flex-row items-center justify-between" style={styles.exerciseHeading}>
           <View className="min-w-0 flex-1 shrink">
@@ -957,30 +1154,27 @@ export default function WorkoutSessionScreen() {
                 ? undefined
                 : previousByName?.sets);
             const exerciseStatuses = setStatuses[index] ?? [];
-            const isExpanded = expandedExerciseName === exercise;
+            const isExpanded = expandedExerciseIndex === index;
             const isExerciseCompleted = areAllSetsCompleted(exerciseStatuses);
             return (
-              <Animated.View
-                key={exerciseConfig.exerciseId ?? exercise}
-                exiting={FadeOut.duration(120).reduceMotion(ReduceMotion.System)}
-                layout={LinearTransition.duration(150).reduceMotion(ReduceMotion.System)}>
-                <WorkoutCard
-                  className={`rounded-3xl border bg-zinc-900/80 ${
-                    isExerciseCompleted
-                      ? 'border-emerald-400/20 bg-emerald-950/40'
-                      : 'border-zinc-800/80'
-                  }`}
-                  gradientColors={Platform.OS === 'web'
-                    ? isExerciseCompleted ? completedCardGradient : sessionCardGradient
-                    : undefined}
-                  glow={Platform.OS === 'web'}
-                  animationDuration={170}
-                  animationOffset={5}
-                  style={[
-                    styles.exerciseCard,
-                    isExpanded && styles.exerciseCardActive,
-                    isExerciseCompleted && styles.exerciseCardCompleted,
-                  ]}>
+              <View
+                key={`${activePlan.id}-${index}`}
+                className={`min-w-0 overflow-hidden rounded-3xl border bg-zinc-900/80 ${
+                  isExerciseCompleted
+                    ? 'border-emerald-400/20 bg-emerald-950/40'
+                    : 'border-zinc-800/80'
+                }`}
+                style={[
+                  exerciseCardGlow,
+                  styles.exerciseCard,
+                  isExpanded && styles.exerciseCardActive,
+                  isExerciseCompleted && styles.exerciseCardCompleted,
+                ]}>
+                <LinearGradient
+                  colors={isExerciseCompleted ? completedCardGradient : sessionCardGradient}
+                  style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}
+                />
+                <View style={styles.exerciseCardContent}>
                 <View className="w-full min-w-0 flex-row items-center overflow-hidden" style={styles.exerciseHeader}>
                   <Pressable
                     accessibilityRole="button"
@@ -1017,7 +1211,9 @@ export default function WorkoutSessionScreen() {
                         {exerciseStatuses.filter((status) => status === 'completed').length}/{exerciseStatuses.length} serie
                       </Text>
                       {isExerciseCompleted ? (
-                        <Text accessibilityLabel="Ćwiczenie ukończone" style={styles.exerciseCompletedLabel}>UKOŃCZONE ✓</Text>
+                        <View className="rounded-full border border-lime-300/50 bg-lime-400/15" style={styles.exerciseCompletedBadge}>
+                          <Text accessibilityLabel="Ćwiczenie ukończone" style={styles.exerciseCompletedLabel}>UKOŃCZONE ✓</Text>
+                        </View>
                       ) : null}
                     </View>
                   </Pressable>
@@ -1049,7 +1245,7 @@ export default function WorkoutSessionScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`${exercise}, ${isExpanded ? 'zwiń' : 'rozwiń'} serie`}
                     accessibilityState={{ expanded: isExpanded }}
-                    onPress={() => toggleExercise(exercise)}
+                    onPress={() => toggleExercise(index)}
                     className="shrink-0 active:opacity-75"
                     style={[styles.expandButton, isExpanded && styles.expandButtonActive]}>
                     <Text style={[styles.expandArrow, isExpanded && styles.expandArrowActive]}>
@@ -1068,10 +1264,7 @@ export default function WorkoutSessionScreen() {
                   )}
                 </View>
                 {isExpanded && (
-                  <Animated.View
-                    entering={FadeIn.duration(140).reduceMotion(ReduceMotion.System)}
-                    exiting={FadeOut.duration(100).reduceMotion(ReduceMotion.System)}
-                    className="overflow-hidden">
+                  <View>
                     <View style={styles.setList}>
                     {exerciseStatuses.map((status, setIndex) => {
                       const previousSet = previousSets?.[setIndex];
@@ -1081,13 +1274,14 @@ export default function WorkoutSessionScreen() {
                           .join(' × ')
                         : '';
                       return (
-                      <Animated.View
+                      <View
                         key={`${exercise}-set-${setIndex}`}
-                        entering={FadeInDown
-                          .duration(140)
-                          .withInitialValues({ opacity: 0, translateY: 3 })
-                          .reduceMotion(ReduceMotion.System)}
+                        className="overflow-hidden rounded-2xl"
                         style={[styles.setRow, setIndex === exerciseStatuses.length - 1 && styles.setRowLast]}>
+                        <LinearGradient
+                          colors={seriesRowGradient}
+                          style={[StyleSheet.absoluteFill, styles.setRowGradient]}
+                        />
                         <View className="min-w-0 flex-row items-center justify-between">
                           <Text style={styles.setName}>SERIA {String(setIndex + 1).padStart(2, '0')}</Text>
                           {previousSet && previousValue ? (
@@ -1113,6 +1307,10 @@ export default function WorkoutSessionScreen() {
                             onPress={() => openKeypad({ exerciseIndex: index, setIndex, field: 'weight' })}
                             className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-950 active:opacity-75"
                             style={styles.valueButton}>
+                            <LinearGradient
+                              colors={seriesFieldGradient}
+                              style={[StyleSheet.absoluteFill, styles.valueButtonGradient]}
+                            />
                             <Text style={styles.valueLabel}>KG</Text>
                             <Text style={styles.valueText} numberOfLines={1}>{exerciseConfig?.sets[setIndex]?.weight || '—'}</Text>
                           </Pressable>
@@ -1122,6 +1320,10 @@ export default function WorkoutSessionScreen() {
                             onPress={() => openKeypad({ exerciseIndex: index, setIndex, field: 'reps' })}
                             className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-950 active:opacity-75"
                             style={styles.valueButton}>
+                            <LinearGradient
+                              colors={seriesFieldGradient}
+                              style={[StyleSheet.absoluteFill, styles.valueButtonGradient]}
+                            />
                             <Text style={styles.valueLabel}>POWT.</Text>
                             <Text style={styles.valueText} numberOfLines={1}>{exerciseConfig?.sets[setIndex]?.reps || '—'}</Text>
                           </Pressable>
@@ -1149,7 +1351,7 @@ export default function WorkoutSessionScreen() {
                             <Text style={styles.deleteSetText}>−</Text>
                           </Pressable>
                         </View>
-                      </Animated.View>
+                      </View>
                       );
                     })}
                     <Pressable
@@ -1161,10 +1363,10 @@ export default function WorkoutSessionScreen() {
                       <Text style={styles.addSetText}>＋ DODAJ SERIĘ</Text>
                     </Pressable>
                     </View>
-                  </Animated.View>
+                  </View>
                 )}
-                </WorkoutCard>
-              </Animated.View>
+                </View>
+              </View>
             );
           })}
         </View>
@@ -1183,6 +1385,18 @@ export default function WorkoutSessionScreen() {
           />
         </View>
       </ScrollView>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Pokaż anatomię i analizę mięśni"
+        onPress={openMuscleSheet}
+        className="items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 active:opacity-80"
+        style={[styles.muscleSheetFab, seriesButtonGlow, showMiniRestTimer && styles.muscleSheetFabAboveRest]}>
+        <SymbolView
+          name={{ ios: 'figure.strengthtraining.traditional', android: 'fitness_center', web: 'fitness_center' }}
+          size={25}
+          tintColor={workoutColors.neon}
+        />
+      </Pressable>
       {showMiniRestTimer && (
         <View className="flex-row items-center justify-between rounded-2xl border border-lime-400/30 bg-zinc-900/95" style={[styles.miniRestTimer, seriesButtonGlow]}>
           <LinearGradient
@@ -1221,20 +1435,49 @@ export default function WorkoutSessionScreen() {
           </View>
         </View>
       )}
-      <View pointerEvents="box-none" style={styles.footer}>
-        {draftStorageError ? (
-          <Text accessibilityRole="alert" className="mb-2 text-center text-xs leading-5 text-amber-200">{draftStorageError}</Text>
-        ) : null}
-        {saveError ? (
-          <Text accessibilityRole="alert" className="mb-2 text-center text-xs leading-5 text-red-300">{saveError}</Text>
-        ) : null}
-        <WorkoutButton
-          label={isSaving ? 'Zapisywanie…' : sessionExerciseNames.length > 0 && completedExercises === sessionExerciseNames.length ? 'Zakończ trening' : 'Zapisz trening'}
-          onPress={finishWorkout}
-          disabled={isSaving}
-        />
-      </View>
       </KeyboardAvoidingView>
+      {isMuscleSheetOpen ? (
+        <GestureHandlerRootView style={styles.muscleSheetOverlay}>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.muscleSheetBackdrop, muscleSheetBackdropStyle]}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Zamknij analizę mięśni"
+            onPress={closeMuscleSheet}
+            style={StyleSheet.absoluteFill}
+          />
+          <Animated.View style={[styles.muscleSheet, muscleSheetAnimatedStyle]}>
+            {Platform.OS === 'web' ? (
+              muscleSheetHeaderContent
+            ) : (
+              <GestureDetector gesture={muscleSheetHeaderPan}>
+                {muscleSheetHeaderContent}
+              </GestureDetector>
+            )}
+            {Platform.OS === 'web' ? (
+              <ScrollView
+                style={styles.muscleSheetScroll}
+                contentContainerStyle={styles.muscleSheetScrollContent}
+                showsVerticalScrollIndicator={false}>
+                {muscleSheetContent}
+              </ScrollView>
+            ) : (
+              <GestureDetector gesture={Gesture.Simultaneous(muscleSheetContentPan, muscleSheetNativeScroll)}>
+                <Animated.ScrollView
+                  onScroll={muscleSheetScrollHandler}
+                  scrollEventThrottle={16}
+                  style={styles.muscleSheetScroll}
+                  contentContainerStyle={styles.muscleSheetScrollContent}
+                  showsVerticalScrollIndicator={false}>
+                  {muscleSheetContent}
+                </Animated.ScrollView>
+              </GestureDetector>
+            )}
+          </Animated.View>
+        </GestureHandlerRootView>
+      ) : null}
       {selectedDetail && (
         <View className="absolute inset-0 bg-black/80" style={styles.detailOverlay}>
           <ExerciseDetailModal
@@ -1307,8 +1550,30 @@ const styles = StyleSheet.create({
   keyboard: {
     flex: 1,
   },
+  sessionHeader: {
+    minHeight: 62,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  sessionBackButton: {
+    width: 38,
+    height: 38,
+  },
+  sessionHeaderEyebrow: {
+    color: '#A3E635',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
+  sessionHeaderVersion: {
+    color: '#9AA69F',
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginTop: 3,
+  },
   title: {
-    color: '#F5F7F2',
+    color: '#F5F7F6',
     fontSize: 32,
     fontWeight: '900',
     letterSpacing: -1.05,
@@ -1323,87 +1588,70 @@ const styles = StyleSheet.create({
     width: 7,
   },
   heroEyebrowText: {
-    color: '#AAB4A8',
+    color: '#A3E635',
     fontSize: 9,
     fontWeight: '800',
     letterSpacing: 1.7,
   },
   sessionScrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 14,
     paddingBottom: 176,
   },
-  progressCard: {
-    backgroundColor: 'rgba(17, 23, 19, 0.96)',
-    borderColor: 'rgba(74, 222, 128, 0.2)',
-    marginTop: 23,
-    padding: 20,
-  },
-  progressCopy: {
-    flex: 1,
-    minWidth: 0,
-    paddingRight: 14,
-  },
-  progressTop: {
+  sessionActionBar: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 2,
+    paddingBottom: 8,
   },
-  progressCaption: {
-    color: '#AAB4A8',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.45,
-  },
-  progressCountRow: {
-    alignItems: 'baseline',
-    flexDirection: 'row',
-    gap: 7,
-    marginTop: 8,
-  },
-  progressCount: {
-    color: workoutColors.text,
-    fontSize: 31,
-    fontWeight: '900',
-    fontVariant: ['tabular-nums'],
-    letterSpacing: -1,
-  },
-  progressTotal: {
-    color: workoutColors.muted,
-    fontSize: 19,
-    fontWeight: '700',
-  },
-  progressUnit: {
-    color: workoutColors.muted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  timer: {
-    alignItems: 'flex-start',
-    backgroundColor: 'rgba(34, 197, 94, 0.075)',
-    borderColor: 'rgba(34, 197, 94, 0.19)',
-    borderRadius: 17,
-    borderWidth: 1,
-    minWidth: 116,
-    paddingHorizontal: 13,
-    paddingVertical: 11,
-  },
-  timerHeading: {
+  sessionTimerPill: {
     alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.42)',
+    borderColor: 'rgba(255,255,255,0.14)',
+    borderRadius: 999,
+    borderWidth: 1,
     flexDirection: 'row',
-    gap: 5,
+    gap: 8,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
   },
-  timerCaption: {
-    color: '#AAB4A8',
-    fontSize: 8,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
-  timerText: {
-    color: workoutColors.neon,
-    fontSize: 22,
+  sessionTimerText: {
+    color: '#F5F7F6',
+    fontSize: 15,
     fontVariant: ['tabular-nums'],
-    fontWeight: '900',
-    letterSpacing: -0.5,
-    marginTop: 5,
+    fontWeight: '800',
+  },
+  finishWorkoutButton: {
+    borderRadius: 999,
+    height: 44,
+    overflow: 'hidden',
+    width: 44,
+    ...Platform.select({
+      web: { boxShadow: '0 6px 18px rgba(34, 197, 94, 0.24)' },
+      default: { elevation: 5 },
+    }),
+  },
+  finishWorkoutGradient: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  finishWorkoutButtonDisabled: {
+    opacity: 0.55,
+  },
+  finishWorkoutButtonPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.96 }],
+  },
+  saveError: {
+    color: '#FCA5A5',
+    fontSize: 12,
+    lineHeight: 18,
+    marginHorizontal: 22,
+    marginTop: 8,
+    textAlign: 'center',
   },
   timerIndicator: {
     backgroundColor: workoutColors.neon,
@@ -1411,24 +1659,93 @@ const styles = StyleSheet.create({
     height: 7,
     width: 7,
   },
-  progressTrack: {
-    backgroundColor: '#252D27',
-    borderRadius: 99,
-    height: 9,
-    marginTop: 20,
-    overflow: 'hidden',
+  muscleSheetFab: {
+    alignItems: 'center',
+    borderRadius: 30,
+    borderWidth: 1,
+    bottom: 20,
+    height: 60,
+    justifyContent: 'center',
+    left: 20,
+    position: 'absolute',
+    width: 60,
+    zIndex: 25,
   },
-  progressFill: {
-    backgroundColor: workoutColors.neon,
+  muscleSheetFabAboveRest: {
+    bottom: 98,
+  },
+  muscleSheetOverlay: {
+    alignItems: 'stretch',
+    bottom: 0,
+    elevation: 50,
+    justifyContent: 'flex-end',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    zIndex: 50,
+  },
+  muscleSheetBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+  },
+  muscleSheet: {
+    backgroundColor: '#080B09',
+    borderColor: '#252D27',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1,
+    height: '85%',
+    maxWidth: 560,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  muscleSheetHandle: {
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  muscleSheetGrabber: {
+    backgroundColor: '#3B443D',
     borderRadius: 99,
-    height: '100%',
+    height: 4,
+    width: 48,
+  },
+  muscleSheetHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  muscleSheetTitle: {
+    color: workoutColors.text,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  muscleSheetClose: {
+    alignItems: 'center',
+    backgroundColor: workoutColors.surface,
+    borderColor: workoutColors.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  muscleSheetScroll: {
+    flex: 1,
+  },
+  muscleSheetScrollContent: {
+    paddingBottom: 24,
   },
   exerciseHeading: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 15,
-    marginTop: 30,
+    marginBottom: 13,
+    marginTop: 22,
     paddingHorizontal: 2,
   },
   exerciseHeadingActions: {
@@ -1437,7 +1754,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   exerciseEyebrow: {
-    color: '#899389',
+    color: '#9AA69F',
     fontSize: 9,
     fontWeight: '800',
     letterSpacing: 1.55,
@@ -1450,8 +1767,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
   },
   exerciseCountBadge: {
+    backgroundColor: 'rgba(0,0,0,0.42)',
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderRadius: 999,
     paddingHorizontal: 11,
-    paddingVertical: 8,
+    paddingVertical: 7,
   },
   editExercisesButton: {
     alignItems: 'center',
@@ -1485,50 +1806,55 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   exerciseLabel: {
-    color: '#B3BDB2',
+    color: '#9AA69F',
     fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0.9,
   },
   exerciseList: {
-    gap: 12,
+    gap: 10,
   },
   exerciseCard: {
-    backgroundColor: Platform.select({ web: '#111613', default: '#0E120F' }),
-    borderColor: 'rgba(222, 243, 225, 0.105)',
-    borderRadius: 23,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 24,
     padding: 0,
   },
+  exerciseCardContent: {
+    position: 'relative',
+    zIndex: 1,
+  },
   exerciseCardActive: {
-    backgroundColor: Platform.select({ web: '#151D15', default: '#121B15' }),
-    borderColor: Platform.select({ web: 'rgba(34, 197, 94, 0.58)', default: 'rgba(112, 165, 120, 0.30)' }),
-    borderLeftWidth: Platform.select({ web: 2, default: 1 }),
+    backgroundColor: 'rgba(11,28,17,0.62)',
+    borderColor: 'rgba(163,230,53,0.42)',
+    borderLeftWidth: 2,
   },
   exerciseCardCompleted: Platform.select({
     web: {
-      backgroundColor: 'rgba(24, 54, 35, 0.88)',
-      borderColor: 'rgba(74, 222, 128, 0.62)',
-      borderLeftWidth: 3,
+      backgroundColor: 'rgba(18, 67, 35, 0.9)',
+      borderColor: 'rgba(163, 230, 53, 0.82)',
+      borderWidth: 2,
+      borderLeftWidth: 5,
     },
     default: {
-      backgroundColor: '#10271A',
-      borderColor: 'rgba(117, 190, 132, 0.56)',
-      borderWidth: 1,
-      borderLeftWidth: 1,
+      backgroundColor: 'rgba(18, 67, 35, 0.92)',
+      borderColor: 'rgba(163, 230, 53, 0.78)',
+      borderWidth: 2,
+      borderLeftWidth: 5,
     },
   }),
   exerciseHeader: {
     alignItems: 'center',
     flexDirection: 'row',
-    minHeight: 94,
-    paddingHorizontal: 16,
-    paddingVertical: 15,
+    minHeight: 88,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
   },
   exerciseNumber: {
     alignItems: 'center',
-    backgroundColor: '#1B241B',
-    borderColor: 'rgba(34, 197, 94, 0.22)',
-    borderRadius: 16,
+    backgroundColor: 'rgba(34,197,94,0.12)',
+    borderColor: 'rgba(74,222,128,0.24)',
+    borderRadius: 15,
     borderWidth: 1,
     height: 46,
     justifyContent: 'center',
@@ -1536,8 +1862,8 @@ const styles = StyleSheet.create({
     width: 46,
   },
   exerciseNumberActive: {
-    backgroundColor: 'rgba(198,255,72,0.14)',
-    borderColor: 'rgba(198,255,72,0.55)',
+    backgroundColor: 'rgba(163,230,53,0.16)',
+    borderColor: 'rgba(163,230,53,0.5)',
   },
   exerciseNumberText: {
     color: workoutColors.neon,
@@ -1569,7 +1895,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   exerciseName: {
-    color: workoutColors.text,
+    color: '#F5F7F6',
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.18,
@@ -1579,7 +1905,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: 9,
-    marginTop: 8,
+    marginTop: 6,
   },
   setDots: {
     alignItems: 'center',
@@ -1587,7 +1913,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   setDot: {
-    backgroundColor: '#3B443D',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: 6,
     height: 8,
     width: 8,
@@ -1597,29 +1923,33 @@ const styles = StyleSheet.create({
     default: { backgroundColor: '#8CC99A' },
   }),
   exerciseSubtext: {
-    color: '#A6B0A6',
+    color: '#9AA69F',
     fontSize: 11,
     fontWeight: '700',
   },
   exerciseCompletedLabel: {
-    color: Platform.select({ web: '#83F3A0', default: '#A6D8AF' }),
-    fontSize: 9,
+    color: '#D9F99D',
+    fontSize: 8,
     fontWeight: '900',
-    letterSpacing: 0.6,
+    letterSpacing: 0.55,
+  },
+  exerciseCompletedBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
   },
   expandButton: {
     alignItems: 'center',
-    backgroundColor: '#1A201C',
-    borderColor: 'rgba(237,247,239,0.12)',
-    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderColor: 'rgba(255,255,255,0.14)',
+    borderRadius: 12,
     borderWidth: 1,
     height: 42,
     justifyContent: 'center',
     width: 42,
   },
   expandButtonActive: {
-    backgroundColor: 'rgba(198,255,72,0.13)',
-    borderColor: 'rgba(198,255,72,0.38)',
+    backgroundColor: 'rgba(163,230,53,0.13)',
+    borderColor: 'rgba(163,230,53,0.42)',
   },
   expandArrow: {
     color: workoutColors.muted,
@@ -1646,16 +1976,22 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(237,247,239,0.1)',
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 16,
-    paddingTop: 4,
+    paddingTop: 10,
   },
   setRow: {
-    borderBottomColor: 'rgba(237,247,239,0.075)',
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderColor: 'rgba(74,222,128,0.2)',
+    borderWidth: 1,
     gap: 10,
-    paddingVertical: 12,
+    marginBottom: 8,
+    padding: 10,
   },
   setRowLast: {
-    borderBottomWidth: 0,
+    marginBottom: 0,
+  },
+  setRowGradient: {
+    borderRadius: 15,
+    pointerEvents: 'none',
   },
   setName: {
     color: '#F0F4EE',
@@ -1677,18 +2013,23 @@ const styles = StyleSheet.create({
   setEditRow: {
     alignItems: 'flex-end',
     flexDirection: 'row',
-    gap: 7,
+    gap: 6,
   },
   valueButton: {
     alignItems: 'flex-start',
-    backgroundColor: 'rgba(7, 13, 9, 0.88)',
-    borderColor: 'rgba(131, 243, 160, 0.14)',
-    borderRadius: 15,
+    backgroundColor: 'rgba(0, 0, 0, 0.38)',
+    borderColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 13,
     borderWidth: 1,
-    minHeight: 53,
+    minHeight: 50,
     minWidth: 0,
+    overflow: 'hidden',
     paddingHorizontal: 9,
-    paddingVertical: 7,
+    paddingVertical: 6,
+  },
+  valueButtonGradient: {
+    borderRadius: 12,
+    pointerEvents: 'none',
   },
   valueLabel: {
     color: '#94A092',
@@ -1710,17 +2051,17 @@ const styles = StyleSheet.create({
   },
   statusButton: {
     alignItems: 'center',
-    backgroundColor: '#080B09',
-    borderColor: 'rgba(255,255,255,0.28)',
-    borderRadius: 7,
+    backgroundColor: 'rgba(8, 16, 11, 0.92)',
+    borderColor: 'rgba(74,222,128,0.32)',
+    borderRadius: 11,
     borderWidth: 1,
-    height: 32,
+    height: 40,
     justifyContent: 'center',
-    width: 32,
+    width: 40,
   },
   statusButtonCompleted: {
-    backgroundColor: 'rgba(131,243,192,0.15)',
-    borderColor: 'rgba(131,243,192,0.6)',
+    backgroundColor: 'rgba(74,222,128,0.16)',
+    borderColor: 'rgba(74,222,128,0.55)',
   },
   statusButtonText: {
     color: workoutColors.muted,
@@ -1737,9 +2078,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,107,107,0.3)',
     borderRadius: 12,
     borderWidth: 1,
-    height: 42,
+    height: 40,
     justifyContent: 'center',
-    width: 36,
+    width: 38,
   },
   disabledDeleteSetButton: {
     opacity: 0.4,
@@ -1765,9 +2106,28 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   restCard: {
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 26,
+    borderWidth: 1,
     gap: 16,
-    marginTop: 16,
+    marginTop: 14,
+    overflow: 'hidden',
     padding: 18,
+    ...Platform.select({
+      web: { boxShadow: '0 8px 24px rgba(0,0,0,0.24)' },
+      default: {
+        elevation: 4,
+        shadowColor: '#000000',
+        shadowOpacity: 0.18,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 5 },
+      },
+    }),
+  },
+  restCardContent: {
+    position: 'relative',
+    zIndex: 1,
   },
   restHeader: {
     alignItems: 'center',
@@ -1776,28 +2136,32 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   restHint: {
-    color: '#96A397',
+    color: '#9AA69F',
     flexShrink: 1,
     fontSize: 8,
     fontWeight: '800',
     letterSpacing: 0.9,
     textAlign: 'right',
   },
+  startSeriesPressable: {
+    alignItems: 'center',
+    borderRadius: 12,
+    flex: 1,
+    overflow: 'hidden',
+  },
   startSeriesButton: {
     alignItems: 'center',
-    backgroundColor: workoutColors.neon,
-    borderRadius: 17,
-    elevation: 5,
+    borderRadius: 12,
     flex: 1,
     flexDirection: 'row',
     gap: 11,
     justifyContent: 'center',
     minHeight: 58,
     paddingHorizontal: 12,
+    width: '100%',
   },
   stopRestButton: {
-    backgroundColor: 'rgba(183, 243, 74, 0.13)',
-    borderColor: 'rgba(183, 243, 74, 0.3)',
+    borderColor: 'rgba(163,230,53,0.38)',
     borderWidth: 1,
     shadowOpacity: 0,
   },
@@ -1807,7 +2171,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   startSeriesText: {
-    color: '#11160C',
+    color: '#07150C',
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 0.6,
@@ -1841,7 +2205,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(131, 243, 160, 0.18)',
     borderRadius: 18,
     borderWidth: 1,
-    bottom: 101,
+    bottom: 16,
     elevation: 14,
     flexDirection: 'row',
     gap: 12,
@@ -1886,8 +2250,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(34, 197, 94, 0.5)',
   },
   miniRestAddButton: {
-    backgroundColor: 'rgba(7, 13, 9, 0.88)',
-    borderColor: 'rgba(237, 247, 239, 0.15)',
+    backgroundColor: 'rgba(0,0,0,0.48)',
+    borderColor: 'rgba(255,255,255,0.14)',
     minWidth: 50,
   },
   miniRestButtonText: {
@@ -1900,13 +2264,13 @@ const styles = StyleSheet.create({
     color: '#11160C',
   },
   restEyebrow: {
-    color: '#9BA69A',
+    color: '#9AA69F',
     fontSize: 8,
     fontWeight: '800',
     letterSpacing: 0.8,
   },
   restTime: {
-    color: workoutColors.text,
+    color: '#F5F7F6',
     fontSize: 22,
     fontVariant: ['tabular-nums'],
     fontWeight: '900',
@@ -2032,17 +2396,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 0.9,
-  },
-  footer: {
-    bottom: 0,
-    left: 0,
-    paddingHorizontal: 22,
-    paddingTop: 8,
-    paddingBottom: 14,
-    position: 'absolute',
-    right: 0,
-    width: '100%',
-    zIndex: 20,
   },
   missingPlan: {
     padding: 22,

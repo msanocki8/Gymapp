@@ -50,7 +50,7 @@ export const exerciseLibrary: Exercise[] = [
     description: 'Ćwiczenie na najszersze mięśnie grzbietu z łatwą do kontrolowania progresją.',
     steps: ['Usiądź stabilnie i zablokuj uda pod poduszkami.', 'Chwyć drążek szeroko, unieś klatkę i opuść barki.', 'Ściągnij drążek do górnej części klatki, prowadząc łokcie w dół.'],
     primaryMuscles: ['Najszersze grzbietu'],
-    secondaryMuscles: ['Biceps', 'Tylny akton barków'],
+    secondaryMuscles: ['Biceps', 'Tylny akton barków', 'Przedramiona'],
   },
   {
     id: 'barbell-row',
@@ -62,7 +62,7 @@ export const exerciseLibrary: Exercise[] = [
     description: 'Ruch przyciągania budujący grubość pleców oraz siłę chwytu.',
     steps: ['Stań na szerokość bioder i pochyl tułów, utrzymując neutralne plecy.', 'Chwyć sztangę nachwytem i napnij brzuch.', 'Przyciągnij gryf do dolnych żeber, zatrzymaj na moment i opuść kontrolowanie.'],
     primaryMuscles: ['Najszersze grzbietu', 'Środek pleców'],
-    secondaryMuscles: ['Tylny akton barków', 'Biceps', 'Przedramiona'],
+    secondaryMuscles: ['Tylny akton barków', 'Czworoboczne', 'Biceps', 'Przedramiona', 'Prostowniki grzbietu'],
   },
   {
     id: 'chest-supported-row',
@@ -74,7 +74,7 @@ export const exerciseLibrary: Exercise[] = [
     description: 'Wiosłowanie z podpartą klatką ogranicza pracę tułowia i pozwala skupić się na mięśniach pleców.',
     steps: ['Oprzyj klatkę o podparcie i ustaw stopy stabilnie.', 'Przyciągnij uchwyty w stronę tułowia, prowadząc łokcie za siebie.', 'Opuść ciężar powoli, nie tracąc kontaktu klatki z podparciem.'],
     primaryMuscles: ['Najszersze grzbietu', 'Środek pleców'],
-    secondaryMuscles: ['Tylny akton barków', 'Biceps'],
+    secondaryMuscles: ['Tylny akton barków', 'Czworoboczne', 'Biceps', 'Przedramiona'],
   },
   {
     id: 'pec-deck-fly',
@@ -98,7 +98,7 @@ export const exerciseLibrary: Exercise[] = [
     description: 'Wielostawowy ruch wzmacniający uda i pośladki. Dobierz zakres do swojej mobilności.',
     steps: ['Ustaw gryf na górnej części pleców, napnij brzuch i ustaw stopy stabilnie.', 'Cofnij biodra i zegnij kolana, prowadząc je w kierunku palców stóp.', 'Wstań, odpychając podłogę całą stopą i utrzymując napięty tułów.'],
     primaryMuscles: ['Czworogłowe uda', 'Pośladki'],
-    secondaryMuscles: ['Dwugłowe uda', 'Prostowniki grzbietu', 'Mięśnie brzucha'],
+    secondaryMuscles: ['Dwugłowe uda', 'Prostowniki grzbietu', 'Mięśnie brzucha', 'Przywodziciele uda'],
   },
   {
     id: 'romanian-deadlift',
@@ -182,7 +182,7 @@ export const exerciseLibrary: Exercise[] = [
     description: 'Wielostawowy ruch rozwijający siłę całego ciała, pośladków i tylnej taśmy.',
     steps: ['Ustaw stopy pod gryfem i chwyć go tuż za kolanami.', 'Napnij brzuch i plecy, wypchnij klatkę i biodra.', 'Wstań, prowadząc gryf blisko nóg, a następnie odłóż go kontrolowanie.'],
     primaryMuscles: ['Pośladki', 'Dwugłowe uda', 'Prostowniki grzbietu'],
-    secondaryMuscles: ['Czworoboczne', 'Przedramiona'],
+    secondaryMuscles: ['Czworoboczne', 'Przedramiona', 'Czworogłowe uda'],
   },
   {
     id: 'pull-up',
@@ -206,7 +206,7 @@ export const exerciseLibrary: Exercise[] = [
     description: 'Stabilne ćwiczenie na nogi pozwalające trenować uda w kontrolowanym zakresie.',
     steps: ['Usiądź i oprzyj plecy o oparcie, stopy ustaw na platformie.', 'Opuść platformę do komfortowej głębokości bez odrywania bioder.', 'Wypchnij platformę, nie blokując kolan.'],
     primaryMuscles: ['Czworogłowe uda'],
-    secondaryMuscles: ['Pośladki'],
+    secondaryMuscles: ['Pośladki', 'Przywodziciele uda'],
   },
   {
     id: 'face-pull',
@@ -218,7 +218,7 @@ export const exerciseLibrary: Exercise[] = [
     description: 'Przyciąganie liny do twarzy wzmacniające tył barków i górną część pleców.',
     steps: ['Ustaw wyciąg na wysokości twarzy i złap końce liny.', 'Cofnij barki, prowadząc dłonie w stronę skroni.', 'Zatrzymaj ruch na moment i wróć do startu pod kontrolą.'],
     primaryMuscles: ['Tylny akton barków'],
-    secondaryMuscles: ['Czworoboczne', 'Rotatory barku'],
+    secondaryMuscles: ['Czworoboczne', 'Środek pleców', 'Rotatory barku'],
   },
   {
     id: 'calf-raise',
@@ -362,7 +362,7 @@ export const exerciseLibrary: Exercise[] = [
     description: 'Poziome przyciąganie uchwytu rozwijające najszersze i środkowe partie pleców.',
     steps: ['Usiądź przy dolnym wyciągu, oprzyj stopy o platformę i ustaw tułów stabilnie.', 'Przyciągnij uchwyt do dolnych żeber, prowadząc łokcie blisko tułowia i ściągając łopatki.', 'Wyprostuj ramiona pod kontrolą, nie zaokrąglając gwałtownie pleców.'],
     primaryMuscles: ['Najszersze grzbietu', 'Środek pleców'],
-    secondaryMuscles: ['Tylny akton barków', 'Biceps', 'Mięśnie przedramion'],
+    secondaryMuscles: ['Tylny akton barków', 'Czworoboczne', 'Biceps', 'Mięśnie przedramion'],
   },
   {
     id: 'reverse-pec-deck',

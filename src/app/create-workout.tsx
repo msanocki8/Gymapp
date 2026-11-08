@@ -14,7 +14,7 @@ import {
 
 import { ExerciseDetailModal } from '@/components/exercise-detail-modal';
 import { ExercisePickerModal } from '@/components/exercise-picker-modal';
-import { WorkoutButton, WorkoutCard, WorkoutHeader, WorkoutScreen, workoutColors, workoutStyles } from '@/components/workout-ui';
+import { WorkoutButton, WorkoutHeader, WorkoutScreen, workoutColors, workoutStyles } from '@/components/workout-ui';
 import { Exercise, exerciseLibrary } from '@/constants/exercise-library';
 import { WorkoutExerciseConfig, WorkoutPlan, useGymApp } from '@/hooks/use-gym-app';
 
@@ -60,6 +60,14 @@ export default function CreateWorkoutScreen() {
 function CreateWorkoutForm({ existingPlan }: { existingPlan?: WorkoutPlan }) {
   const router = useRouter();
   const { sessions, addPlan, updatePlan } = useGymApp();
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/workout-flow');
+  };
 
   function getPreviousPerformance(exerciseName: string, setIndex: number) {
     const previousConfig = sessions.find((session) =>
@@ -203,7 +211,7 @@ function CreateWorkoutForm({ existingPlan }: { existingPlan?: WorkoutPlan }) {
 
   return (
     <WorkoutScreen>
-      <WorkoutHeader eyebrow={existingPlan ? 'EDYCJA PLANU' : 'NOWY PLAN'} onBack={() => router.back()} />
+      <WorkoutHeader eyebrow={existingPlan ? 'EDYCJA PLANU' : 'NOWY PLAN'} onBack={handleBack} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboard}>
@@ -225,7 +233,7 @@ function CreateWorkoutForm({ existingPlan }: { existingPlan?: WorkoutPlan }) {
             </Text>
           </View>
 
-          <WorkoutCard className="rounded-3xl border border-zinc-800/80 bg-zinc-900/70" style={styles.routineCard}>
+          <View className="rounded-3xl border border-zinc-800/80 bg-zinc-900/70" style={[styles.formCard, styles.routineCard]}>
             <View className="flex-row items-center justify-between">
               <View className="min-w-0 flex-1">
                 <Text style={styles.fieldEyebrow}>01 · TOŻSAMOŚĆ PLANU</Text>
@@ -263,7 +271,7 @@ function CreateWorkoutForm({ existingPlan }: { existingPlan?: WorkoutPlan }) {
               className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 text-zinc-100"
               style={styles.input}
             />
-          </WorkoutCard>
+          </View>
 
           <View className="mt-8 flex-row items-end justify-between" style={styles.exerciseSectionHeader}>
             <View className="min-w-0 flex-1">
@@ -278,10 +286,10 @@ function CreateWorkoutForm({ existingPlan }: { existingPlan?: WorkoutPlan }) {
           {exerciseConfigs.length > 0 ? (
             <View className="min-w-0" style={styles.exerciseList}>
               {exerciseConfigs.map((exercise, exerciseIndex) => (
-                <WorkoutCard
+                <View
                   key={`${exercise.name}-${exerciseIndex}`}
                   className="rounded-3xl border border-zinc-800/80 bg-zinc-900/80"
-                  style={styles.exerciseCard}>
+                  style={[styles.formCard, styles.exerciseCard]}>
                   <View className="flex-row items-center">
                     <View className="mr-3 items-center justify-center rounded-2xl bg-lime-400/10" style={styles.exerciseNumber}>
                       <Text style={styles.exerciseNumberText}>{String(exerciseIndex + 1).padStart(2, '0')}</Text>
@@ -375,7 +383,7 @@ function CreateWorkoutForm({ existingPlan }: { existingPlan?: WorkoutPlan }) {
                       <Text style={styles.addSetLabel}>DODAJ SERIĘ</Text>
                     </Pressable>
                   </View>
-                </WorkoutCard>
+                </View>
               ))}
             </View>
           ) : (
@@ -433,6 +441,7 @@ const styles = StyleSheet.create({
   eyebrowDot: { height: 7, width: 7 },
   title: { color: workoutColors.text, fontSize: 31, fontWeight: '900', letterSpacing: -1, lineHeight: 38 },
   subtitle: { color: '#A1ABA0', fontSize: 13, lineHeight: 20, marginTop: 8, maxWidth: 430 },
+  formCard: { borderWidth: 1, borderRadius: 24, overflow: 'hidden' },
   routineCard: { padding: 17 },
   fieldEyebrow: { color: '#8F9A8E', fontSize: 8, fontWeight: '800', letterSpacing: 1.25 },
   cardTitle: { color: workoutColors.text, fontSize: 15, fontWeight: '800', marginTop: 5 },

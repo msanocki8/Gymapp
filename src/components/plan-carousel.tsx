@@ -1,4 +1,4 @@
-import { useContext, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -10,19 +10,17 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent, ViewStyle } from 'react-native';
-import { BlurView } from 'expo-blur';
-import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView } from 'expo-symbols';
+import { useRouter } from 'expo-router';
 
-import { GlassBlurTargetContext } from '@/components/glass-blur-context';
 import type { WorkoutPlan } from '@/hooks/use-gym-app';
 
 type WebScrollSnapStyle = ViewStyle & { scrollSnapType?: string };
 type WebItemSnapStyle = ViewStyle & { scrollSnapAlign?: string };
 
 const CARD_GAP = 10;
-const HORIZONTAL_PADDING = 16;
+const HORIZONTAL_PADDING = 0;
 const CARD_WIDTH = 235;
 
 const webScrollSnapStyle: WebScrollSnapStyle = Platform.OS === 'web'
@@ -48,7 +46,6 @@ function PlanCard({
   onDelete?: () => void;
   deleting: boolean;
 }) {
-  const blurTarget = useContext(GlassBlurTargetContext);
   const badge = plan.focus.split('·')[0]?.trim();
   const exerciseRows = plan.exerciseConfigs?.length
     ? plan.exerciseConfigs.slice(0, 2).map((exercise) => ({
@@ -60,115 +57,117 @@ function PlanCard({
     : plan.exercises.slice(0, 2).map((name) => ({ name, details: null }));
 
   return (
-    <View style={[styles.card, webItemSnapStyle, { width }]}>
-      {Platform.OS !== 'web' ? (
-        <BlurView
-          blurTarget={blurTarget ?? undefined}
-          blurMethod={Platform.OS === 'android' ? 'dimezisBlurViewSdk31Plus' : undefined}
-          intensity={22}
-          tint="dark"
-          style={styles.cardBlur}
-        />
-      ) : null}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Start: ${plan.name}`}
-        onPress={onPress}
-        style={({ pressed }) => [styles.cardMain, pressed && styles.cardPressed]}>
-        <View style={styles.cardTop}>
-          <View style={styles.planIcon}>
-            <SymbolView
-              name={{ ios: 'dumbbell.fill', android: 'fitness_center', web: 'fitness_center' }}
-              size={19}
-              tintColor="#86efac"
-            />
+    <View style={[webItemSnapStyle, { width }, styles.planCard]}>
+      <LinearGradient
+        pointerEvents="none"
+        colors={['#171D18', '#101511', '#0B0E0C']}
+        locations={[0, 0.45, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(74,222,128,0.12)', 'rgba(74,222,128,0.025)', 'rgba(0,0,0,0)']}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={[StyleSheet.absoluteFill, styles.planAccent]}
+      />
+      <View style={styles.planTop}>
+        <View style={styles.planIcon}>
+          <SymbolView
+            name={{ ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }}
+            size={12}
+            tintColor="#4ADE80"
+          />
+        </View>
+        {badge ? (
+          <View style={styles.planBadge}>
+            <Text numberOfLines={1} style={styles.planBadgeText}>{badge}</Text>
           </View>
-          {badge ? (
-            <View style={styles.planBadge}>
-              <Text numberOfLines={1} style={styles.planBadgeText}>{badge}</Text>
+        ) : null}
+      </View>
+
+      <Text numberOfLines={1} ellipsizeMode="tail" style={styles.planTitle}>
+        {plan.name}
+      </Text>
+      <Text numberOfLines={1} style={styles.planMeta}>
+        {plan.duration} min · {plan.exercises.length} ćw.
+      </Text>
+
+      <View style={styles.planDivider} />
+
+      <View style={styles.exerciseRows}>
+        {[0, 1].map((index) => {
+          const exercise = exerciseRows[index];
+          return (
+            <View key={exercise?.name ?? `empty-${index}`} style={styles.exerciseRow}>
+              <Text numberOfLines={1} style={styles.exerciseName}>
+                {exercise?.name ?? ''}
+              </Text>
+              <Text numberOfLines={1} style={styles.exerciseDetails}>
+                {exercise?.details ?? ''}
+              </Text>
             </View>
-          ) : null}
-        </View>
+          );
+        })}
+      </View>
 
-        <Text numberOfLines={2} ellipsizeMode="tail" style={styles.planTitle}>
-          {plan.name}
-        </Text>
-        <Text numberOfLines={1} style={styles.planMeta}>
-          {plan.duration} min · {plan.exercises.length} ćw.
-        </Text>
-
-        <View style={styles.divider} />
-
-        <View style={styles.exerciseRows}>
-          {[0, 1].map((index) => {
-            const exercise = exerciseRows[index];
-            return (
-              <View key={exercise?.name ?? `empty-${index}`} style={styles.exerciseRow}>
-                <Text numberOfLines={1} style={styles.exerciseName}>
-                  {exercise?.name ?? ''}
-                </Text>
-                <Text numberOfLines={1} style={styles.exerciseDetails}>
-                  {exercise?.details ?? ''}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-
-      </Pressable>
       <View style={styles.cardActions}>
-        <View style={styles.secondaryActions}>
-          {onEdit ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Edytuj plan ${plan.name}`}
-              onPress={onEdit}
-              style={({ pressed }) => [styles.secondaryButton, pressed && styles.cardPressed]}>
-              <SymbolView
-                name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
-                size={14}
-                tintColor="#aab4a8"
-              />
-            </Pressable>
-          ) : null}
-          {onDelete ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Usuń plan ${plan.name}`}
-              accessibilityState={{ disabled: deleting }}
-              disabled={deleting}
-              onPress={onDelete}
-              style={({ pressed }) => [styles.secondaryButton, styles.deleteButton, pressed && styles.cardPressed]}>
-              {deleting ? (
-                <ActivityIndicator color="#fca5a5" size="small" />
-              ) : (
+        <View style={styles.cardActionsContent}>
+          <View style={styles.secondaryActions}>
+            {onEdit ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Edytuj plan ${plan.name}`}
+                onPress={onEdit}
+                style={({ pressed }) => [styles.secondaryButton, pressed && styles.cardPressed]}>
                 <SymbolView
-                  name={{ ios: 'trash', android: 'delete', web: 'delete' }}
+                  name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
                   size={14}
-                  tintColor="#fca5a5"
+                  tintColor="#aab4a8"
                 />
-              )}
-            </Pressable>
-          ) : null}
+              </Pressable>
+            ) : null}
+            {onDelete ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Usuń plan ${plan.name}`}
+                accessibilityState={{ disabled: deleting }}
+                disabled={deleting}
+                onPress={onDelete}
+                style={({ pressed }) => [styles.secondaryButton, styles.deleteButton, pressed && styles.cardPressed]}>
+                {deleting ? (
+                  <ActivityIndicator color="#fca5a5" size="small" />
+                ) : (
+                  <SymbolView
+                    name={{ ios: 'trash', android: 'delete', web: 'delete' }}
+                    size={14}
+                    tintColor="#fca5a5"
+                  />
+                )}
+              </Pressable>
+            ) : null}
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Start: ${plan.name}`}
+            onPress={onPress}
+            style={({ pressed }) => [styles.startButtonPressable, pressed && styles.cardPressed]}>
+            <LinearGradient
+              colors={['#22c55e', '#a3e635']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.startButton}>
+              <SymbolView
+                name={{ ios: 'play.fill', android: 'play_arrow', web: 'play_arrow' }}
+                size={14}
+                tintColor="#04210f"
+              />
+              <Text style={styles.startButtonText}>Start</Text>
+            </LinearGradient>
+          </Pressable>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Start: ${plan.name}`}
-          onPress={onPress}
-          style={({ pressed }) => [styles.startButtonPressable, pressed && styles.cardPressed]}>
-          <LinearGradient
-            colors={['#22c55e', '#a3e635']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.startButton}>
-            <SymbolView
-              name={{ ios: 'play.fill', android: 'play_arrow', web: 'play_arrow' }}
-              size={14}
-              tintColor="#04210f"
-            />
-            <Text style={styles.startButtonText}>Start</Text>
-          </LinearGradient>
-        </Pressable>
       </View>
     </View>
   );
@@ -310,7 +309,7 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     alignItems: 'center',
-    borderRadius: 999,
+    borderRadius: 16,
     flexDirection: 'row',
     gap: 5,
     justifyContent: 'center',
@@ -338,37 +337,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: HORIZONTAL_PADDING,
   },
   card: {
-    backgroundColor: Platform.OS === 'web' ? 'rgba(13,18,14,0.96)' : 'rgba(9,13,10,0.64)',
-    borderColor: 'rgba(235,242,235,0.13)',
-    borderRadius: 24,
-    borderWidth: 0.5,
-    overflow: 'hidden',
-    padding: 14,
+    // Replaced by WorkoutCard - kept for reference
   },
   cardBlur: {
+    // Removed - WorkoutCard handles
     ...StyleSheet.absoluteFill,
     borderRadius: 24,
     overflow: 'hidden',
     pointerEvents: 'none',
     zIndex: 0,
   },
-  cardMain: {
+  contentContainer: {
     flexShrink: 0,
     gap: 10,
-    minWidth: 0,
-    position: 'relative',
-    zIndex: 1,
   },
   cardPressed: {
     opacity: 0.86,
   },
   cardActions: {
+    marginTop: 6,
+  },
+  cardActionsContent: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 8,
-    position: 'relative',
-    zIndex: 1,
+    gap: 9,
+    minHeight: 38,
+    justifyContent: 'space-between',
   },
   secondaryActions: {
     alignItems: 'center',
@@ -378,59 +372,21 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: '#0A0E0B',
+    borderColor: 'rgba(153,177,159,0.26)',
     borderRadius: 12,
     borderWidth: 1,
-    height: 40,
+    height: 38,
     justifyContent: 'center',
-    width: 40,
+    width: 38,
   },
   deleteButton: {
-    backgroundColor: 'rgba(127,29,29,0.3)',
-    borderColor: 'rgba(248,113,113,0.7)',
-    borderWidth: 1.5,
+    backgroundColor: '#130B0C',
+    borderColor: 'rgba(248,113,113,0.48)',
+    borderWidth: 1,
   },
   cardTop: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 44,
-  },
-  planIcon: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(34,197,94,0.16)',
-    borderColor: 'rgba(34,197,94,0.3)',
-    borderRadius: 14,
-    borderWidth: 0.5,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  planBadge: {
-    backgroundColor: 'rgba(190,242,100,0.12)',
-    borderRadius: 999,
-    maxWidth: '70%',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  planBadgeText: {
-    color: '#bef264',
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  planTitle: {
-    color: '#f9fafb',
-    fontSize: 18,
-    fontWeight: '900',
-    lineHeight: 22,
-  },
-  planMeta: {
-    color: '#d1d5db',
-    fontSize: 12,
-    fontWeight: '600',
+    // Replaced by planTop
   },
   divider: {
     backgroundColor: 'rgba(255,255,255,0.1)',
@@ -438,43 +394,46 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   exerciseRows: {
-    height: 52,
+    height: 46,
     justifyContent: 'space-between',
   },
   exerciseRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 12,
-    height: 22,
+    gap: 8,
+    height: 19,
     justifyContent: 'space-between',
     minWidth: 0,
   },
   exerciseName: {
-    color: '#9ca3af',
+    color: '#D5D8D6',
     flex: 1,
-    fontSize: 11,
+    fontSize: 10,
     minWidth: 0,
   },
   exerciseDetails: {
-    color: '#9ca3af',
+    color: '#B8BFBA',
     flexShrink: 0,
-    fontSize: 10,
+    fontSize: 9,
     maxWidth: '38%',
     textAlign: 'right',
   },
   startButton: {
     alignItems: 'center',
-    borderRadius: 13,
+    borderColor: 'rgba(217,255,143,0.64)',
+    borderWidth: 1,
+    borderRadius: 999,
     flexDirection: 'row',
-    gap: 9,
-    height: 40,
+    gap: 7,
+    height: 38,
     justifyContent: 'center',
     minWidth: 0,
     width: '100%',
+    paddingHorizontal: 12,
   },
   startButtonText: {
-    color: '#04210f',
-    fontSize: 13,
+    color: '#061207',
+    fontSize: 11,
     fontWeight: '900',
   },
   pagination: {
@@ -502,5 +461,77 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginBottom: 12,
     textAlign: 'center',
+  },
+  planTop: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: 38,
+  },
+  planIcon: {
+    alignItems: 'center',
+    backgroundColor: '#0B100C',
+    borderColor: 'rgba(74,222,128,0.28)',
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 38,
+    justifyContent: 'center',
+    width: 38,
+  },
+  planBadge: {
+    backgroundColor: 'rgba(163,230,53,0.12)',
+    borderColor: 'rgba(163,230,53,0.42)',
+    borderRadius: 999,
+    borderWidth: 1,
+    maxWidth: '70%',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  planBadgeText: {
+    color: '#D9F99D',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  planDivider: {
+    backgroundColor: 'rgba(191,207,195,0.14)',
+    height: StyleSheet.hairlineWidth,
+    width: '100%',
+  },
+  planAccent: {
+    width: '72%',
+  },
+  planCard: {
+    backgroundColor: '#0B0E0C',
+    borderColor: 'rgba(180,198,185,0.2)',
+    borderRadius: 22,
+    borderWidth: 1,
+    overflow: 'hidden',
+    padding: 16,
+    gap: 9,
+    ...Platform.select({
+      web: { boxShadow: '0 12px 26px rgba(0, 0, 0, 0.42), 0 0 20px rgba(34, 197, 94, 0.09)' },
+      default: {
+        elevation: 5,
+        shadowColor: '#22C55E',
+        shadowOpacity: 0.12,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 6 },
+      },
+    }),
+  },
+  planTitle: {
+    color: '#F5F7F6',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: -0.25,
+    lineHeight: 18,
+  },
+  planMeta: {
+    color: '#A3E635',
+    fontSize: 10,
+    fontWeight: '700',
   },
 });

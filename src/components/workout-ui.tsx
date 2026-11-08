@@ -1,6 +1,5 @@
 import type { ComponentRef, PropsWithChildren } from 'react';
 import { useRef } from 'react';
-import { BlurTargetView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   Pressable,
@@ -14,8 +13,8 @@ import { SafeAreaView, SafeAreaViewProps } from 'react-native-safe-area-context'
 import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
 
 import { GlassBlurTargetContext } from '@/components/glass-blur-context';
+import { AmbientBackground } from '@/components/ambient-background';
 import '@/lib/nativewind-interop';
-import { GlowBackdrop } from '@/components/glow-backdrop';
 
 export const workoutColors = {
   background: '#080B09',
@@ -62,12 +61,12 @@ export function WorkoutScreen({
   return (
     <SafeAreaView style={styles.screen} edges={edges}>
       <GlassBlurTargetContext.Provider value={blurTarget}>
-        <GlowBackdrop />
-        <BlurTargetView ref={blurTarget} style={styles.blurTarget}>
+        <AmbientBackground blurTarget={blurTarget} />
+        <View style={styles.blurTarget}>
           <View className="w-full min-w-0 flex-1 overflow-hidden" style={[styles.content, { maxWidth }]}>
             {children}
           </View>
-        </BlurTargetView>
+        </View>
       </GlassBlurTargetContext.Provider>
     </SafeAreaView>
   );
