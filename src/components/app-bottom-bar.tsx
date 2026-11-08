@@ -39,7 +39,7 @@ export function AppBottomBar({
     <View style={[styles.bar, { height: 62 + bottomInset, paddingBottom: bottomInset }]}>
       {tabs.map((tab) => {
         const isActive = activeTab === tab.name;
-        const color = isActive ? '#34D399' : '#879284';
+        const color = isActive ? '#BEF264' : '#8F9A93';
 
         return (
           <Pressable
@@ -52,7 +52,7 @@ export function AppBottomBar({
             <View style={[styles.iconContainer, isActive && styles.iconContainerActive]}>
               <SymbolView name={tab.icon} size={20} tintColor={color} />
             </View>
-            <Text style={[styles.label, { color }]}>{tab.label}</Text>
+            <Text style={[styles.label, isActive && styles.activeLabel, { color }]}>{tab.label}</Text>
           </Pressable>
         );
       })}
@@ -63,8 +63,8 @@ export function AppBottomBar({
 const styles = StyleSheet.create({
   bar: {
     alignItems: 'center',
-    backgroundColor: '#080B09',
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#050706',
+    borderTopColor: 'rgba(255,255,255,0.10)',
     borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -86,12 +86,15 @@ const styles = StyleSheet.create({
     width: 44,
   },
   iconContainerActive: {
-    backgroundColor: 'rgba(52,211,153,0.13)',
+    backgroundColor: 'rgba(190,242,100,0.12)',
   },
   label: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '600',
     letterSpacing: 0.2,
+  },
+  activeLabel: {
+    fontWeight: '800',
   },
   pressed: {
     opacity: 0.75,

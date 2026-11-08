@@ -1,15 +1,20 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppBottomBar, type AppTabName } from '@/components/app-bottom-bar';
 
 export default function AppTabs() {
   const insets = useSafeAreaInsets();
+  const segments = useSegments();
 
   return (
     <Tabs
       tabBar={(props) => {
-        const activeTab = props.state.routes[props.state.index].name as AppTabName;
+        const segment = segments.find(
+          (name): name is AppTabName =>
+            name === 'training' || name === 'history' || name === 'account',
+        );
+        const activeTab = segment ?? props.state.routes[props.state.index].name as AppTabName;
         const activeRoute = props.state.routes[props.state.index];
 
         return (

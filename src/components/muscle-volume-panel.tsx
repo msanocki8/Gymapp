@@ -92,8 +92,8 @@ export function MuscleVolumePanel({
 
 			<Text style={styles.disclaimer}>
 				{period === 'session'
-					? 'Tylko bieżący trening. Serie pomocnicze nie są doliczane do celu.'
-					: 'Suma wykonanych serii z bieżącego tygodnia. Serie pomocnicze nie są doliczane do celu.'}
+					? 'Tylko bieżący trening. Serie pomocnicze liczymy jako 0,5 serii.'
+					: 'Suma wykonanych serii z bieżącego tygodnia. Serie pomocnicze liczymy jako 0,5 serii.'}
 			</Text>
 			<View style={styles.summaryGrid}>
 				{period === 'session' ? (
@@ -163,7 +163,7 @@ export function MuscleVolumePanel({
 					</Text>
 					{selected.hasAuxiliaryStimulus ? (
 						<Text style={styles.auxiliaryNote}>
-							Partia uczestniczy też pomocniczo w ćwiczeniach; tych serii nie doliczamy do celu.
+							Każda wykonana seria z udziałem pomocniczym dodaje 0,5 serii tej partii.
 						</Text>
 					) : null}
 				</View>
@@ -201,7 +201,7 @@ function getStatusExplanation(muscle: MuscleVolume, period: AnalysisPeriod) {
 function CountStat({ label, value }: { label: string; value: number }) {
 	return (
 		<View style={styles.countStat}>
-			<Text style={styles.setCountValue}>{value}</Text>
+			<Text style={styles.setCountValue}>{formatSets(value)}</Text>
 			<Text style={styles.setCountLabel}>{label}</Text>
 		</View>
 	);

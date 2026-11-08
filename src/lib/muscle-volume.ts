@@ -264,7 +264,10 @@ export function calculateMuscleVolume({
 				hasAuxiliaryStimulus: false,
 			};
 			if (contribution.role === 'primary') current.performedSets += completedSets;
-			else current.hasAuxiliaryStimulus = true;
+			else {
+				current.performedSets += completedSets * 0.5;
+				current.hasAuxiliaryStimulus = true;
+			}
 			totals.set(contribution.muscleId, current);
 		}
 	}

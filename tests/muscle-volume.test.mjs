@@ -6,6 +6,7 @@ import {
 	calculateMuscleVolume,
 	defaultMuscleRanges,
 	defaultSessionRanges,
+	exerciseMuscleMappings,
 	getLocalWeekKey,
 } from '../src/lib/muscle-volume.ts';
 
@@ -49,15 +50,32 @@ test('planned sets do not count as muscle stimulus', () => {
 	assert.equal(resultFor(result, 'triceps').status, 'no-stimulus');
 });
 
-test('primary muscles receive whole completed sets; auxiliary muscles are not added to the target count', () => {
+test('primary muscles receive full sets and secondary muscles receive half sets', () => {
 	const result = calculateMuscleVolume({
 		exercises: [exercise('bench-press', 'Wyciskanie sztangi', ['completed', 'completed', 'pending'])],
 	});
 	assert.equal(resultFor(result, 'chest').performedSets, 2);
 	assert.equal(resultFor(result, 'chest').status, 'below');
-	assert.equal(resultFor(result, 'triceps').performedSets, 0);
+	assert.equal(resultFor(result, 'triceps').performedSets, 1);
 	assert.equal(resultFor(result, 'triceps').hasAuxiliaryStimulus, true);
-	assert.equal(resultFor(result, 'triceps').status, 'no-stimulus');
+	assert.equal(resultFor(result, 'triceps').status, 'below');
+	assert.equal(resultFor(result, 'frontDelts').performedSets, 1);
+});
+
+test('secondary mappings add 0.5 for each completed set across the exercise catalog', () => {
+	for (const [exerciseId, assignments] of Object.entries(exerciseMuscleMappings)) {
+		for (const assignment of assignments.filter(({ role }) => role === 'secondary')) {
+			const result = calculateMuscleVolume({
+				exercises: [exercise(exerciseId, exerciseId, ['completed'])],
+				period: 'session',
+			});
+			assert.equal(
+				resultFor(result, assignment.muscleId).performedSets,
+				0.5,
+				`${exerciseId}: ${assignment.muscleId}`,
+			);
+		}
+	}
 });
 
 test('chest weekly ranges classify requested examples and every boundary consistently', () => {
@@ -229,14 +247,14 @@ test('weekly analysis includes the current session and saved sessions from the l
 	assert.equal(getLocalWeekKey(Date.parse('2026-10-18T20:00:00Z'), 'Europe/Warsaw'), '2026-10-12');
 });
 
-test('session analysis reports auxiliary engagement neutrally and empty analysis has no stimulus', () => {
+test('session analysis counts auxiliary sets and empty analysis has no stimulus', () => {
 	const session = calculateMuscleVolume({
 		exercises: [exercise('bench-press', 'Wyciskanie sztangi', ['completed'])],
 		period: 'session',
 	});
-	assert.equal(resultFor(session, 'triceps').performedSets, 0);
+	assert.equal(resultFor(session, 'triceps').performedSets, 0.5);
 	assert.equal(resultFor(session, 'triceps').hasAuxiliaryStimulus, true);
-	assert.equal(resultFor(session, 'triceps').status, 'no-stimulus');
+	assert.equal(resultFor(session, 'triceps').status, 'below');
 	const empty = calculateMuscleVolume({ exercises: [], period: 'session' });
 	assert.ok(empty.every((muscle) => muscle.status === 'no-stimulus' && muscle.performedSets === 0));
 });

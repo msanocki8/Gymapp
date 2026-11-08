@@ -8,11 +8,11 @@ export function GlowBackdrop() {
           style={[
             styles.webGlow,
             {
-              top: -130,
-              right: -150,
-              width: 470,
-              height: 470,
-              backgroundColor: 'rgba(34, 197, 94, 0.3)',
+              top: -100,
+              right: -120,
+              width: 360,
+              height: 360,
+              backgroundColor: 'rgba(22, 101, 52, 0.55)',
             },
           ]}
         />
@@ -20,11 +20,11 @@ export function GlowBackdrop() {
           style={[
             styles.webGlow,
             {
-              bottom: -280,
-              left: -180,
-              width: 520,
-              height: 520,
-              backgroundColor: 'rgba(83, 230, 165, 0.28)',
+              top: 330,
+              right: -30,
+              width: 220,
+              height: 220,
+              backgroundColor: 'rgba(77, 80, 30, 0.35)',
             },
           ]}
         />
@@ -32,11 +32,11 @@ export function GlowBackdrop() {
           style={[
             styles.webGlow,
             {
-              top: '42%',
-              left: '58%',
-              width: 210,
-              height: 210,
-              backgroundColor: 'rgba(181, 240, 102, 0.26)',
+              bottom: -200,
+              left: -150,
+              width: 320,
+              height: 320,
+              backgroundColor: 'rgba(22, 101, 52, 0.5)',
             },
           ]}
         />
@@ -49,34 +49,34 @@ export function GlowBackdrop() {
       <View
         style={{
           position: 'absolute',
-          right: '-12%',
-          top: 72,
-          width: 300,
-          height: 300,
-          borderRadius: 150,
-          backgroundColor: 'rgba(34, 197, 94, 0.3)',
+          right: -120,
+          top: -100,
+          width: 360,
+          height: 360,
+          borderRadius: 180,
+          backgroundColor: 'rgba(22, 101, 52, 0.55)',
         }}
       />
       <View
         style={{
           position: 'absolute',
-          left: '8%',
-          top: 400,
-          width: 300,
-          height: 300,
-          borderRadius: 150,
-          backgroundColor: 'rgba(83, 230, 165, 0.22)',
+          right: -30,
+          top: 330,
+          width: 220,
+          height: 220,
+          borderRadius: 110,
+          backgroundColor: 'rgba(77, 80, 30, 0.35)',
         }}
       />
       <View
         style={{
           position: 'absolute',
-          right: '18%',
-          bottom: -192,
+          left: -150,
+          bottom: -200,
           width: 320,
           height: 320,
           borderRadius: 160,
-          backgroundColor: 'rgba(181, 240, 102, 0.18)',
+          backgroundColor: 'rgba(22, 101, 52, 0.5)',
         }}
       />
     </View>
