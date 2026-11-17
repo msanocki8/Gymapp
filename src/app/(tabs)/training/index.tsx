@@ -7,6 +7,7 @@ import {
   useCallback,
   useContext,
   useRef,
+  useState,
   type ComponentProps,
   type ComponentRef,
   type RefObject,
@@ -25,6 +26,7 @@ import { SymbolView } from 'expo-symbols';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import glassTokens from '@/constants/glass-tokens.json';
 import { AmbientBackground } from '@/components/ambient-background';
+import { AppSidePanel } from '@/components/app-side-panel';
 import { GradientText } from '@/components/gradient-text';
 import { useGymApp } from '@/hooks/use-gym-app';
 import type { WorkoutPlan } from '@/hooks/use-gym-app';
@@ -209,6 +211,7 @@ function WorkoutPlanCard({
 export default function TrainingHomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const scrollRef = useRef<ScrollViewInstance>(null);
   const blurTarget = useRef<ComponentRef<typeof View>>(null);
   const {
@@ -266,11 +269,11 @@ export default function TrainingHomeScreen() {
             </View>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Ustawienia konta"
-              onPress={() => router.push('/(tabs)/account')}
+              accessibilityLabel="Otwórz menu"
+              onPress={() => setIsMenuOpen(true)}
               className="h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/35 active:opacity-75">
               <AppIcon
-                name={{ ios: 'gearshape.fill', android: 'settings', web: 'settings' }}
+                name={{ ios: 'line.3.horizontal', android: 'menu', web: 'menu' }}
                 size={20}
                 color="#A3E635"
               />
@@ -454,6 +457,7 @@ export default function TrainingHomeScreen() {
         </View>
         </ScrollView>
       </LocalBlurTargetContext.Provider>
+      <AppSidePanel visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
     </SafeAreaView>
   );
 }

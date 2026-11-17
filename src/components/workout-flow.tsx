@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppBottomBar } from '@/components/app-bottom-bar';
+import { AppSidePanel } from '@/components/app-side-panel';
 import { useGymApp } from '@/hooks/use-gym-app';
 import type { WorkoutPlan } from '@/hooks/use-gym-app';
 import { useAuth } from '@/hooks/use-auth';
@@ -41,6 +42,7 @@ export function WorkoutFlow() {
   } = useGymApp();
   const { weeklyWorkoutGoal } = useAuth();
   const insets = useSafeAreaInsets();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const confirmDeletePlan = (plan: WorkoutPlan) => {
@@ -122,10 +124,10 @@ export function WorkoutFlow() {
               </View>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Ustawienia konta"
-                onPress={() => router.push('/(tabs)/account')}
+                accessibilityLabel="Otwórz menu"
+                onPress={() => setIsMenuOpen(true)}
                 style={({ pressed }) => [styles.headerIconButton, pressed && styles.pressed]}>
-                <SymbolView name={{ ios: 'gearshape.fill', android: 'settings', web: 'settings' }} size={17} tintColor={workoutColors.mint} />
+                <SymbolView name={{ ios: 'line.3.horizontal', android: 'menu', web: 'menu' }} size={17} tintColor={workoutColors.mint} />
               </Pressable>
             </View>
 
@@ -294,6 +296,7 @@ export function WorkoutFlow() {
           }}
         />
       </View>
+      <AppSidePanel visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
     </WorkoutScreen>
   );
 }
