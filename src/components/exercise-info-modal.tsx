@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
 import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -51,18 +50,27 @@ function ExerciseDetails({ exercise, onClose }: { exercise: Exercise; onClose: (
 
           <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
             <View style={styles.heroImageWrap}>
-              <Image
-                source={typeof exercise.image === 'string' ? { uri: exercise.image } : exercise.image}
-                contentFit="cover"
-                transition={180}
-                accessibilityLabel={`Ilustracja: ${exercise.name}`}
-                style={styles.heroImage}
-              />
-              <View style={styles.imageScrim} />
+              <Text style={styles.demoImageNotice}>Wersja Demo{'\n'}zdjęcia nie dodane</Text>
               <View style={styles.equipmentPill}><Text style={styles.equipmentText}>{exercise.equipment}</Text></View>
             </View>
 
             <Text style={styles.description}>{exercise.description}</Text>
+
+            <View style={styles.musclePanel}>
+              <Text style={styles.panelEyebrow}>ZAANGAŻOWANE MIĘŚNIE</Text>
+              {exercise.primaryMuscles && exercise.primaryMuscles.length > 0 && (
+                <View style={styles.muscleRow}>
+                  <Text style={styles.muscleLabel}>GŁÓWNE</Text>
+                  <Text style={styles.muscleNames}>{exercise.primaryMuscles.join(' · ')}</Text>
+                </View>
+              )}
+              {exercise.secondaryMuscles && exercise.secondaryMuscles.length > 0 && (
+                <View style={styles.muscleRow}>
+                  <Text style={styles.muscleLabel}>POMOCNICZE</Text>
+                  <Text style={styles.muscleNames}>{exercise.secondaryMuscles.join(' · ')}</Text>
+                </View>
+              )}
+            </View>
 
             <View style={styles.motionPanel}>
               <View style={styles.motionHeader}>
@@ -117,11 +125,14 @@ const styles = StyleSheet.create({
   closeButton: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, justifyContent: 'center', alignItems: 'center' },
   modalContent: { paddingHorizontal: 20, paddingBottom: 28 },
   heroImageWrap: { height: 164, overflow: 'hidden', borderRadius: 7, backgroundColor: C.elevated, marginBottom: 14 },
-  heroImage: { width: '100%', height: '100%' },
-  imageScrim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(5, 10, 15, 0.18)' },
+  demoImageNotice: { color: C.muted, fontSize: 15, fontWeight: '700', lineHeight: 22, textAlign: 'center' },
   equipmentPill: { position: 'absolute', bottom: 10, left: 10, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 4, backgroundColor: 'rgba(10, 13, 18, 0.82)' },
   equipmentText: { color: '#E5EEF6', fontSize: 10, fontWeight: '600' },
   description: { color: '#AAB5C0', fontSize: 12, lineHeight: 18, marginBottom: 16 },
+  musclePanel: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 7, padding: 13, gap: 12, marginBottom: 16 },
+  muscleRow: { gap: 4 },
+  muscleLabel: { color: C.accent, fontSize: 8, fontWeight: '700', letterSpacing: 0.8 },
+  muscleNames: { color: C.text, fontSize: 11, lineHeight: 16 },
   motionPanel: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 7, padding: 13, marginBottom: 19 },
   motionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   panelEyebrow: { color: C.muted, fontSize: 8, fontWeight: '700', letterSpacing: 1.1 },

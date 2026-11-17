@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -10,6 +10,8 @@ import {
 
 import { Exercise, exerciseCategories, exerciseLibrary } from '@/constants/exercise-library';
 import { workoutColors } from '@/components/workout-ui';
+import { requireSupabase } from '@/lib/supabase';
+import type { Database } from '@/lib/database.types';
 
 type FilterMode = 'Sprzęt' | 'Mięśnie';
 
@@ -24,6 +26,32 @@ type ExercisePickerModalProps = {
 };
 
 const equipmentFilters = ['Sztanga', 'Hantle', 'Wyciąg', 'Maszyna', 'Masa ciała'];
+type ExerciseCatalogRow = Database['public']['Tables']['exercise_catalog']['Row'];
+
+function mapCatalogExercise(row: ExerciseCatalogRow): Exercise {
+  const category = exerciseCategories.find((item) => item === row.category);
+  if (!category) throw new Error(`Nieznana partia mięśniowa w katalogu: ${row.category}.`);
+
+  const bundledExercise = exerciseLibrary.find((exercise) => exercise.id === row.id);
+  const categoryImage = exerciseLibrary.find((exercise) => exercise.category === category)?.image;
+  const image = row.image_ref.startsWith('http')
+    ? row.image_ref
+    : bundledExercise?.image ?? categoryImage;
+  if (image === undefined) throw new Error(`Brak ilustracji dla ćwiczenia „${row.name}”.`);
+
+  return {
+    id: row.id,
+    name: row.name,
+    category,
+    equipment: row.equipment,
+    level: row.level,
+    image,
+    description: row.description,
+    steps: row.steps,
+    primaryMuscles: row.primary_muscles,
+    secondaryMuscles: row.secondary_muscles,
+  };
+}
 
 function matchesEquipment(exercise: Exercise, equipment: string) {
   const value = exercise.equipment.toLocaleLowerCase('pl-PL');
@@ -46,15 +74,58 @@ export function ExercisePickerModal({
   const [filterMode, setFilterMode] = useState<FilterMode>('Mięśnie');
   const [filterValue, setFilterValue] = useState<string | null>(null);
   const [customName, setCustomName] = useState('');
+  const [catalogExercises, setCatalogExercises] = useState<Exercise[]>([]);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [isCatalogLoading, setCatalogLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadCatalog() {
+      try {
+        const { data, error } = await requireSupabase()
+          .from('exercise_catalog')
+          .select('*')
+          .order('name');
+
+        if (error) throw new Error(error.message);
+        if (!data || data.length === 0) throw new Error('Katalog ćwiczeń w Supabase jest pusty.');
+
+        const exercises = data.map(mapCatalogExercise);
+        if (isMounted) {
+          setCatalogExercises(exercises);
+          setCatalogError(null);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setCatalogError(error instanceof Error ? error.message : 'Nieznany błąd pobierania katalogu.');
+        }
+      } finally {
+        if (isMounted) setCatalogLoading(false);
+      }
+    }
+
+    void loadCatalog();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const availableExercises = useMemo(() => {
+    const exercisesById = new Map(exerciseLibrary.map((exercise) => [exercise.id, exercise]));
+    for (const exercise of catalogExercises) exercisesById.set(exercise.id, exercise);
+    return [...exercisesById.values()];
+  }, [catalogExercises]);
 
   const visibleExercises = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase('pl-PL');
-    return [...customExercises, ...exerciseLibrary].filter((exercise) => {
+    return [...customExercises, ...availableExercises].filter((exercise) => {
       const matchesQuery = !normalizedQuery || [
         exercise.name,
         exercise.category,
         exercise.equipment,
         ...(exercise.primaryMuscles ?? []),
+        ...(exercise.secondaryMuscles ?? []),
       ].some((value) => value.toLocaleLowerCase('pl-PL').includes(normalizedQuery));
       const matchesFilter = !filterValue || (
         filterMode === 'Mięśnie'
@@ -63,7 +134,7 @@ export function ExercisePickerModal({
       );
       return matchesQuery && matchesFilter;
     });
-  }, [customExercises, filterMode, filterValue, query]);
+  }, [availableExercises, customExercises, filterMode, filterValue, query]);
 
   const recentExercises = useMemo(
     () => recentExerciseIds
@@ -144,6 +215,18 @@ export function ExercisePickerModal({
               </Pressable>
             )}
           </View>
+
+          {isCatalogLoading && (
+            <Text accessibilityRole="text" style={styles.catalogStatus}>Pobieranie katalogu z Supabase…</Text>
+          )}
+          {catalogError && (
+            <View accessibilityRole="alert" style={styles.catalogWarning}>
+              <Text style={styles.catalogWarningTitle}>Katalog online niedostępny</Text>
+              <Text style={styles.catalogWarningText}>
+                Wyświetlam katalog zapisany w aplikacji. Błąd Supabase: {catalogError}
+              </Text>
+            </View>
+          )}
 
           <View className="mt-5 flex-row rounded-2xl border border-zinc-800 bg-zinc-900 p-1" style={styles.filterTabs}>
             {(['Mięśnie', 'Sprzęt'] as const).map((mode) => (
@@ -352,6 +435,10 @@ const styles = StyleSheet.create({
   searchBox: { minHeight: 54 },
   searchIcon: { color: '#AAB4A8', fontSize: 25, lineHeight: 30, marginRight: 10 },
   searchInput: { color: workoutColors.text, fontSize: 14, height: 52, paddingVertical: 0 },
+  catalogStatus: { color: '#AAB4A8', fontSize: 11, marginTop: 10 },
+  catalogWarning: { borderWidth: 1, borderColor: '#80592E', backgroundColor: '#2A2116', borderRadius: 12, padding: 12, marginTop: 10 },
+  catalogWarningTitle: { color: '#FFD18A', fontSize: 12, fontWeight: '800', marginBottom: 4 },
+  catalogWarningText: { color: '#D5C2A5', fontSize: 11, lineHeight: 16 },
   clearSearch: { alignItems: 'center', justifyContent: 'center', height: 32, width: 32 },
   clearSearchText: { color: '#AAB4A8', fontSize: 24 },
   filterTabs: { minHeight: 48 },

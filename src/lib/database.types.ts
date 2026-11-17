@@ -95,6 +95,47 @@ export type Database = {
         Update: Record<string, never>;
         Relationships: [];
       };
+      exercise_catalog: {
+        Row: {
+          id: string;
+          name: string;
+          category: string;
+          equipment: string;
+          level: string;
+          image_ref: string;
+          description: string;
+          steps: string[];
+          primary_muscles: string[];
+          secondary_muscles: string[];
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          name: string;
+          category: string;
+          equipment: string;
+          level: string;
+          image_ref: string;
+          description: string;
+          steps?: string[];
+          primary_muscles?: string[];
+          secondary_muscles?: string[];
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          category?: string;
+          equipment?: string;
+          level?: string;
+          image_ref?: string;
+          description?: string;
+          steps?: string[];
+          primary_muscles?: string[];
+          secondary_muscles?: string[];
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

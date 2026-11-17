@@ -1,3 +1,5 @@
+import { additionalExercises } from './additional-exercises';
+
 export type ExerciseCategory = 'Klatka' | 'Plecy' | 'Nogi' | 'Barki' | 'Ramiona' | 'Core';
 
 export type Exercise = {
@@ -222,12 +224,12 @@ export const exerciseLibrary: Exercise[] = [
   },
   {
     id: 'calf-raise',
-    name: 'Wspięcia na palce',
+    name: 'Wspięcia na palce stojąc',
     category: 'Nogi',
     equipment: 'Maszyna · suwnica',
     level: 'Początkujący',
     image: require('../../assets/exercise-images/calf-raise.png'),
-    description: 'Izolowane ćwiczenie wzmacniające mięśnie łydek.',
+    description: 'Wspięcia wykonywane stojąc wzmacniają mięśnie łydek, szczególnie ich część brzuchatą.',
     steps: ['Ustaw przód stóp na platformie i opuść pięty poniżej jej krawędzi.', 'Wspnij się wysoko na palce bez odbijania.', 'Opuść pięty powoli, czując rozciągnięcie łydki.'],
     primaryMuscles: ['Łydki'],
     secondaryMuscles: ['Płaszczkowaty'],
@@ -246,9 +248,9 @@ export const exerciseLibrary: Exercise[] = [
   },
   {
     id: 'leg-curl',
-    name: 'Uginanie nóg',
+    name: 'Uginanie nóg leżąc na maszynie',
     category: 'Nogi',
-    equipment: 'Maszyna',
+    equipment: 'Maszyna do uginania nóg leżąc',
     level: 'Początkujący',
     image: 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?auto=format&fit=crop&w=720&h=440&q=85',
     description: 'Ruch zginania kolan wzmacniający tylną część ud.',
@@ -436,4 +438,5 @@ export const exerciseLibrary: Exercise[] = [
     primaryMuscles: ['Biceps'],
     secondaryMuscles: ['Mięsień ramienny', 'Mięśnie przedramion'],
   },
+  ...additionalExercises,
 ];

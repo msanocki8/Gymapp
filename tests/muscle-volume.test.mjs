@@ -202,11 +202,29 @@ test('row muscles use primary and secondary weights; stabilizers are omitted', (
 });
 
 test('each exercise in the library has an explicit muscle-volume mapping', () => {
-	const source = readFileSync(new URL('../src/constants/exercise-library.ts', import.meta.url), 'utf8');
-	const libraryIds = [...source.matchAll(/\bid: '([^']+)'/g)].map((match) => match[1]);
+	const sources = [
+		'../src/constants/exercise-library.ts',
+		'../src/constants/additional-exercises.ts',
+	].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'));
+	const libraryIds = sources.flatMap((source) => [...source.matchAll(/\bid: '([^']+)'/g)].map((match) => match[1]));
 	assert.ok(libraryIds.length > 0);
 	for (const exerciseId of libraryIds) {
 		assert.ok(exerciseMuscleMappings[exerciseId], `Missing muscle mapping for ${exerciseId}`);
+	}
+});
+
+test('the Supabase migration seeds every exercise in the library', () => {
+	const sources = [
+		'../src/constants/exercise-library.ts',
+		'../src/constants/additional-exercises.ts',
+	].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'));
+	const libraryIds = sources.flatMap((source) => [...source.matchAll(/\bid: '([^']+)'/g)].map((match) => match[1]));
+	const migration = readFileSync(
+		new URL('../supabase/migrations/20261117190000_shared_exercise_catalog.sql', import.meta.url),
+		'utf8',
+	);
+	for (const exerciseId of libraryIds) {
+		assert.ok(migration.includes(`'${exerciseId}'`), `Supabase migration does not seed ${exerciseId}`);
 	}
 });
 

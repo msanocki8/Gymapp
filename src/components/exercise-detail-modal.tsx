@@ -1,7 +1,6 @@
 import { useContext, useState } from 'react';
 import { BlurView } from 'expo-blur';
 import {
-  Image,
   Pressable,
   Platform,
   ScrollView,
@@ -76,18 +75,9 @@ export function ExerciseDetailModal({
             {tab === 'O ćwiczeniu' ? (
               <>
                 <View className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900" style={styles.demoCard}>
-                  {exercise.image ? (
-                    <Image
-                      source={typeof exercise.image === 'string' ? { uri: exercise.image } : exercise.image}
-                      resizeMode="cover"
-                      style={styles.demoImage}
-                    />
-                  ) : (
-                    <View className="flex-1 items-center justify-center bg-zinc-900">
-                      <Text style={styles.customExerciseGlyph}>{exercise.name.slice(0, 1).toLocaleUpperCase('pl-PL')}</Text>
-                    </View>
-                  )}
-                  <View className="absolute inset-0 bg-black/30" />
+                  <View className="flex-1 items-center justify-center px-4">
+                    <Text style={styles.demoImageNotice}>Wersja Demo — zdjęcia nie dodane</Text>
+                  </View>
                   <View className="absolute bottom-3 left-3 rounded-full border border-zinc-600/70 bg-zinc-950/80 px-3 py-2">
                     <Text style={styles.demoBadge}>PODGLĄD TECHNIKI</Text>
                   </View>
@@ -272,8 +262,7 @@ const styles = StyleSheet.create({
   tabTextActive: { color: workoutColors.neon },
   content: { paddingHorizontal: 20, paddingTop: 3, paddingBottom: 28 },
   demoCard: { height: 188, backgroundColor: '#181E19' },
-  demoImage: { height: '100%', width: '100%' },
-  customExerciseGlyph: { color: workoutColors.neon, fontSize: 56, fontWeight: '900' },
+  demoImageNotice: { color: '#A5AFA4', fontSize: 14, fontWeight: '700', textAlign: 'center' },
   demoBadge: { color: '#E6EDE5', fontSize: 8, fontWeight: '800', letterSpacing: 0.85 },
   demoBadgeAccent: { color: workoutColors.neon, fontSize: 8, fontWeight: '800', letterSpacing: 0.5 },
   description: { color: '#B5BEB4', fontSize: 13, lineHeight: 20, marginTop: 15, marginBottom: 16 },
