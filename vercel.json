@@ -6,6 +6,10 @@
   "framework": null,
   "rewrites": [
     {
+      "source": "/share/:token",
+      "destination": "/share/[token]"
+    },
+    {
       "source": "/:path*",
       "destination": "/index.html"
     }
