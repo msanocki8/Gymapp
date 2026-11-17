@@ -7,6 +7,7 @@ import type { Json } from '@/lib/database.types';
 
 export type WorkoutPlan = {
   id: string;
+  shareToken?: string;
   name: string;
   focus: string;
   duration: number;
@@ -153,6 +154,7 @@ const sanoPlans: WorkoutPlan[] = [
 
 type PlanRow = {
   id: string;
+  share_token: string;
   source_plan_id: string | null;
   name: string;
   focus: string;
@@ -302,6 +304,7 @@ function parseExerciseConfigs(value: Json | null): WorkoutExerciseConfig[] | und
 function planFromRow(row: PlanRow): WorkoutPlan {
   return {
     id: row.id,
+    shareToken: row.share_token,
     sourcePlanId: row.source_plan_id ?? undefined,
     name: row.name,
     focus: row.focus,
@@ -427,7 +430,7 @@ export function GymAppProvider({ children }: PropsWithChildren) {
       const [plansResult, hiddenPlansResult] = await Promise.all([
         client
           .from('workout_plans')
-          .select('id, source_plan_id, name, focus, duration, exercises, exercise_configs')
+          .select('id, share_token, source_plan_id, name, focus, duration, exercises, exercise_configs')
           .eq('user_id', userId)
           .order('created_at', { ascending: false }),
         client
@@ -470,7 +473,7 @@ export function GymAppProvider({ children }: PropsWithChildren) {
         exercises: plan.exercises,
         exercise_configs: plan.exerciseConfigs ?? null,
       })
-      .select('id, source_plan_id, name, focus, duration, exercises, exercise_configs')
+      .select('id, share_token, source_plan_id, name, focus, duration, exercises, exercise_configs')
       .single();
     if (error) throw new Error(`Nie udało się zapisać planu: ${error.message}`);
     const savedPlan = planFromRow(data);
@@ -495,7 +498,7 @@ export function GymAppProvider({ children }: PropsWithChildren) {
           exercises: plan.exercises,
           exercise_configs: plan.exerciseConfigs ?? null,
         })
-          .select('id, source_plan_id, name, focus, duration, exercises, exercise_configs')
+          .select('id, share_token, source_plan_id, name, focus, duration, exercises, exercise_configs')
           .single()
       : await client.from('workout_plans').update({
           name: plan.name,
@@ -506,7 +509,7 @@ export function GymAppProvider({ children }: PropsWithChildren) {
         })
           .eq('id', id)
           .eq('user_id', userId)
-          .select('id, source_plan_id, name, focus, duration, exercises, exercise_configs')
+          .select('id, share_token, source_plan_id, name, focus, duration, exercises, exercise_configs')
           .single();
     const { data, error } = result;
     if (error) throw new Error(`Nie udało się zaktualizować planu: ${error.message}`);

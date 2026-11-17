@@ -19,6 +19,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          share_token: string;
           name: string;
           focus: string;
           source_plan_id: string | null;
@@ -31,6 +32,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          share_token?: string;
           name: string;
           focus: string;
           source_plan_id?: string | null;
@@ -41,6 +43,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          share_token?: string;
           name?: string;
           focus?: string;
           duration?: number;
@@ -138,7 +141,18 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      get_shared_workout_plan: {
+        Args: { p_token: string };
+        Returns: {
+          name: string;
+          focus: string;
+          duration: number;
+          exercises: string[];
+          exercise_configs: Json;
+        }[];
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

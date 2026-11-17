@@ -1,11 +1,14 @@
-import { Href, Link } from 'expo-router';
+import { Href, Link, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 
 import { AuthShell } from '@/components/auth-shell';
 import { isValidNick, useAuth } from '@/hooks/use-auth';
+import { getSafeShareReturnTo } from '@/lib/auth-return-to';
 
 export default function RegisterScreen() {
+  const { returnTo: requestedReturnTo } = useLocalSearchParams<{ returnTo?: string | string[] }>();
+  const returnTo = getSafeShareReturnTo(requestedReturnTo);
   const { signUp, isLoading, configurationError } = useAuth();
   const [nick, setNick] = useState('');
   const [password, setPassword] = useState('');
@@ -106,7 +109,14 @@ export default function RegisterScreen() {
 
       <View className="mt-5 flex-row flex-wrap justify-center gap-1">
         <Text className="text-sm text-white/50">Masz już konto?</Text>
-        <Link href={'/(auth)/login' as Href} className="text-sm font-bold text-neon">Zaloguj się</Link>
+        <Link
+          href={{
+            pathname: '/(auth)/login',
+            params: returnTo ? { returnTo } : {},
+          } as Href}
+          className="text-sm font-bold text-neon">
+          Zaloguj się
+        </Link>
       </View>
     </AuthShell>
   );

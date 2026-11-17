@@ -296,7 +296,13 @@ export function WorkoutFlow() {
           }}
         />
       </View>
-      <AppSidePanel visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
+      <AppSidePanel
+        visible={isMenuOpen}
+        onClose={() => setIsMenuOpen(false)}
+        plans={plans}
+        plansLoading={plansLoading}
+        plansError={plansError}
+      />
     </WorkoutScreen>
   );
 }

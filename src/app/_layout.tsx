@@ -1,19 +1,23 @@
 import '../../global.css';
 
-import { DarkTheme, Redirect, Stack, ThemeProvider, useSegments } from 'expo-router';
+import { DarkTheme, Redirect, Stack, ThemeProvider, useGlobalSearchParams, useSegments } from 'expo-router';
+import type { Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, Text, View } from 'react-native';
 
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import { GymAppProvider } from '@/hooks/use-gym-app';
+import { getSafeShareReturnTo } from '@/lib/auth-return-to';
 
 function AppNavigator() {
   const { session, isLoading } = useAuth();
   const segments = useSegments();
+  const searchParams = useGlobalSearchParams<{ returnTo?: string | string[] }>();
   const rootSegment: string = segments[0] ?? '';
-  const routeIsAllowed = session
+  const isPublicShareRoute = rootSegment === 'share';
+  const routeIsAllowed = isPublicShareRoute || (session
     ? rootSegment !== '(auth)' && rootSegment !== 'index'
-    : rootSegment === '(auth)';
+    : rootSegment === '(auth)');
 
   if (isLoading) {
     return (
@@ -25,7 +29,18 @@ function AppNavigator() {
   }
 
   if (!routeIsAllowed) {
-    return <Redirect href={session ? '/(tabs)/training' : '/(auth)/login'} />;
+    const shareReturnTo = getSafeShareReturnTo(searchParams.returnTo);
+    return (
+      <Redirect
+        href={
+          session
+            ? rootSegment === '(auth)' && shareReturnTo
+              ? shareReturnTo as Href
+              : '/(tabs)/training'
+            : '/(auth)/login'
+        }
+      />
+    );
   }
 
   return (
@@ -40,6 +55,7 @@ function AppNavigator() {
       <Stack.Screen name="workout-flow" />
       <Stack.Screen name="create-workout" />
       <Stack.Screen name="workout-session" />
+      <Stack.Screen name="share/[token]" />
     </Stack>
   );
 }

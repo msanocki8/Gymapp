@@ -1,11 +1,14 @@
-import { Href, Link } from 'expo-router';
+import { Href, Link, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 
 import { AuthShell } from '@/components/auth-shell';
 import { useAuth } from '@/hooks/use-auth';
+import { getSafeShareReturnTo } from '@/lib/auth-return-to';
 
 export default function LoginScreen() {
+  const { returnTo: requestedReturnTo } = useLocalSearchParams<{ returnTo?: string | string[] }>();
+  const returnTo = getSafeShareReturnTo(requestedReturnTo);
   const { signIn, isLoading, configurationError } = useAuth();
   const [nick, setNick] = useState('');
   const [password, setPassword] = useState('');
@@ -81,7 +84,14 @@ export default function LoginScreen() {
 
       <View className="mt-5 flex-row flex-wrap justify-center gap-1">
         <Text className="text-sm text-white/50">Nie masz konta?</Text>
-        <Link href={'/(auth)/register' as Href} className="text-sm font-bold text-neon">Załóż konto</Link>
+        <Link
+          href={{
+            pathname: '/(auth)/register',
+            params: returnTo ? { returnTo } : {},
+          } as Href}
+          className="text-sm font-bold text-neon">
+          Załóż konto
+        </Link>
       </View>
     </AuthShell>
   );
