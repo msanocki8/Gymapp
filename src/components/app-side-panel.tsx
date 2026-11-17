@@ -51,8 +51,8 @@ export function AppSidePanel({ visible, onClose, plans, plansLoading = false, pl
 
     if (Platform.OS !== 'web') {
       void Share.share(
-        { message: url, title: plan.name, url },
-        { dialogTitle: `Udostępnij plan: ${plan.name}` },
+        { message: url },
+        { dialogTitle: 'Udostępnij link' },
       ).then((result) => {
         if (result.action === Share.sharedAction || result.action === Share.dismissedAction) closePanel();
       }).catch((error: unknown) => {
@@ -67,8 +67,6 @@ export function AppSidePanel({ visible, onClose, plans, plansLoading = false, pl
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
         const sharePromise = navigator.share({
-          title: plan.name,
-          text: `Plan treningowy: ${plan.name}`,
           url,
         });
         void sharePromise.then(closePanel).catch((error: unknown) => {
