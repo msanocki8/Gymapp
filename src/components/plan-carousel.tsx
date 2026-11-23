@@ -13,6 +13,7 @@ import type { NativeScrollEvent, NativeSyntheticEvent, ViewStyle } from 'react-n
 import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView } from 'expo-symbols';
 import { useRouter } from 'expo-router';
+import { FilledPlayIcon } from '@/components/filled-play-icon';
 
 import type { WorkoutPlan } from '@/hooks/use-gym-app';
 
@@ -159,11 +160,7 @@ function PlanCard({
               start={{ x: 0, y: 0.5 }}
               end={{ x: 1, y: 0.5 }}
               style={styles.startButton}>
-              <SymbolView
-                name={{ ios: 'play.fill', android: 'play_arrow', web: 'play_arrow' }}
-                size={14}
-                tintColor="#04210f"
-              />
+              <FilledPlayIcon size={14} color="#04210f" />
               <Text style={styles.startButtonText}>Start</Text>
             </LinearGradient>
           </Pressable>

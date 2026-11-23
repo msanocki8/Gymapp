@@ -55,6 +55,7 @@ function AppNavigator() {
       <Stack.Screen name="workout-flow" />
       <Stack.Screen name="create-workout" />
       <Stack.Screen name="workout-session" />
+      <Stack.Screen name="ai-coach" />
       <Stack.Screen name="share/[token]" />
     </Stack>
   );

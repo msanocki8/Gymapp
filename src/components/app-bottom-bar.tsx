@@ -7,9 +7,9 @@ import { useEffect } from 'react';
 import type { ComponentProps } from 'react';
 import Animated, {
   Easing,
+  makeMutable,
   useAnimatedStyle,
   useReducedMotion,
-  useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
@@ -26,6 +26,8 @@ const FAB_SIZE = 66;
 const FAB_CENTER_BELOW_TOP = 12;
 const FAB_OVERHANG = FAB_SIZE / 2 - FAB_CENTER_BELOW_TOP;
 const MORPH_MS = 600;
+const morphEasing = Easing.bezier(0.65, 0, 0.35, 1);
+const startMorph = makeMutable(0);
 
 const icons: Record<AppTabName | 'ai', IconName> = {
   training: { ios: 'house', android: 'home', web: 'home' },
@@ -105,12 +107,14 @@ export function AppBottomBar({
 }) {
   const bottomPadding = Platform.OS === 'web' ? 14 : Math.max(bottomInset, 10);
   const reducedMotion = useReducedMotion();
-  // 0 = play triangle, 1 = lightning bolt. Always starts at 0 so the picker screen animates in.
-  const morph = useSharedValue(0);
+  const morph = startMorph;
 
   useEffect(() => {
-    const target = startActive ? 1 : 0;
-    morph.set(reducedMotion ? target : withTiming(target, { duration: MORPH_MS, easing: Easing.bezier(0.65, 0, 0.35, 1) }));
+    if (!startActive) return;
+    morph.set(reducedMotion ? 1 : withTiming(1, { duration: MORPH_MS, easing: morphEasing }));
+    return () => {
+      morph.set(reducedMotion ? 0 : withTiming(0, { duration: MORPH_MS, easing: morphEasing }));
+    };
   }, [startActive, reducedMotion, morph]);
 
   const playStyle = useAnimatedStyle(() => ({

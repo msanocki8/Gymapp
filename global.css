@@ -19,6 +19,22 @@ body {
     radial-gradient(ellipse at 73% 88%, rgba(181, 240, 102, 0.045), transparent 32rem);
 }
 
+html body .ai-coach-viewport {
+  position: fixed !important;
+  inset: 0 !important;
+  display: flex !important;
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  height: var(--ai-coach-viewport-height, 100vh) !important;
+  height: var(--ai-coach-viewport-height, 100dvh) !important;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+}
+
+.ai-coach-composer {
+  padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+}
+
 * {
   scrollbar-color: #364333 transparent;
   scrollbar-width: thin;
