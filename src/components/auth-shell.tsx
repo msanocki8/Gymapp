@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { PropsWithChildren } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,8 +16,13 @@ export function AuthShell({ children }: PropsWithChildren) {
           contentContainerClassName="mx-auto w-full max-w-[480px] flex-grow justify-center px-5 py-10"
           keyboardShouldPersistTaps="handled">
           <View className="mb-8 items-center">
-            <View className="mb-4 h-16 w-16 items-center justify-center rounded-[22px] border border-neon/30 bg-neon/10">
-              <Text className="text-[30px] font-black text-neon">G</Text>
+            <View className="mb-4 h-16 w-16 overflow-hidden rounded-[22px] border border-neon/30">
+              <Image
+                accessibilityLabel="Logo GymApp"
+                contentFit="cover"
+                source={require('@/assets/images/gymapp-logo.png')}
+                style={{ width: '100%', height: '100%' }}
+              />
             </View>
             <Text className="text-[10px] font-bold tracking-[3px] text-neon">GYM LOG</Text>
             <Text className="mt-2 text-center text-3xl font-black text-white">Twój trening. Twoje konto.</Text>

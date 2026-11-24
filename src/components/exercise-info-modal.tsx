@@ -36,7 +36,7 @@ function ExerciseDetails({ exercise, onClose }: { exercise: Exercise; onClose: (
     <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <View style={styles.scrim}>
         <Pressable accessibilityRole="button" accessibilityLabel="Zamknij szczegóły" onPress={onClose} style={StyleSheet.absoluteFill} />
-        <View style={styles.sheet}>
+        <View nativeID="exercise-info-sheet" style={styles.sheet}>
           <View style={styles.handle} />
           <View style={styles.modalHeader}>
             <View style={styles.modalHeading}>

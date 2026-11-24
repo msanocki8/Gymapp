@@ -103,6 +103,7 @@ export function AppSidePanel({
           style={StyleSheet.absoluteFill}
         />
         <View
+          nativeID="app-side-panel"
           accessibilityViewIsModal
           style={[
             styles.panel,

@@ -127,7 +127,7 @@ export function AppBottomBar({
   }));
 
   return (
-    <View pointerEvents="box-none" style={[styles.bar, { paddingBottom: bottomPadding }]}>
+    <View nativeID="app-bottom-bar" pointerEvents="box-none" style={[styles.bar, { paddingBottom: bottomPadding }]}>
       {/* The row is tall enough to hold the raised button, so every pixel of it stays tappable. */}
       <View pointerEvents="box-none" style={styles.row}>
         <View pointerEvents="none" style={styles.pillBackground}>
