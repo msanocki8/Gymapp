@@ -6,6 +6,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useMemo,
   useRef,
   useState,
   type ComponentProps,
@@ -30,6 +31,7 @@ import glassTokens from '@/constants/glass-tokens.json';
 import { APP_BOTTOM_BAR_CONTENT_HEIGHT } from '@/components/app-bottom-bar';
 import { AmbientBackground } from '@/components/ambient-background';
 import { AppSidePanel } from '@/components/app-side-panel';
+import { GymFlame, GymLogoTile } from '@/components/gym-flame';
 import { ObsidianCard } from '@/components/obsidian-card';
 import { useGymApp } from '@/hooks/use-gym-app';
 import type { WorkoutPlan } from '@/hooks/use-gym-app';
@@ -236,6 +238,29 @@ export default function TrainingHomeScreen() {
   } = useGymApp();
   const { weeklyWorkoutGoal } = useAuth();
   const completedWorkouts = Math.min(countWorkoutsThisWeek(sessions), weeklyWorkoutGoal);
+  const weekDays = useMemo(() => {
+    const today = new Date();
+    const monday = new Date(today);
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+
+    return Array.from({ length: 7 }, (_, index) => {
+      const dayStart = new Date(monday);
+      dayStart.setDate(monday.getDate() + index);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayStart.getDate() + 1);
+      const isToday = dayStart.toDateString() === today.toDateString();
+      const trained = sessions.some((session) =>
+        session.completedAt >= dayStart.getTime() && session.completedAt < dayEnd.getTime());
+
+      return {
+        key: dayStart.toISOString(),
+        label: ['P', 'W', 'Ś', 'C', 'P', 'S', 'N'][index],
+        isToday,
+        trained,
+      };
+    });
+  }, [sessions]);
 
   useFocusEffect(
     useCallback(() => {
@@ -260,21 +285,17 @@ export default function TrainingHomeScreen() {
           }}
           showsVerticalScrollIndicator={false}>
         <View className="mx-auto w-full max-w-[560px] gap-[22px]">
-          <View className="flex-row items-center justify-between gap-[14px]">
-            <View className="min-w-0 flex-1">
-              <View className="flex-row items-center">
-                <View className="mr-2 h-[28px] flex-row items-center gap-[7px] rounded-full bg-[#4ADE80] px-[11px]">
-                  <AppIcon
-                    name={{ ios: 'figure.strengthtraining.traditional', android: 'fitness_center', web: 'fitness_center' }}
-                    size={14}
-                    color="#06210D"
-                  />
-                  <Text className="text-[12px] font-black tracking-[1.4px] text-[#06210D]">GYM LOG</Text>
-                </View>
+          <View className="flex-row items-center justify-between gap-3">
+            <View className="flex-row items-center gap-3">
+              <GymLogoTile size={54} />
+              <View className="gap-[3px]">
+                <Text accessibilityRole="header" className="text-[18px] font-black tracking-[2.4px] text-text-primary">
+                  GYM<Text className="text-neon-lime">LOG</Text>
+                </Text>
+                <Text className="text-[11px] font-semibold tracking-[1.6px] text-text-muted">
+                  TWÓJ DZIENNIK TRENINGOWY
+                </Text>
               </View>
-              <Text className="ml-[2px] mt-[4px] text-[12px] text-text-muted">
-                Twoje prywatne zapiski
-              </Text>
             </View>
             <Pressable
               accessibilityRole="button"
@@ -295,42 +316,39 @@ export default function TrainingHomeScreen() {
             </Text>
           </View>
 
-          <GlassCard contentClassName="w-full px-5 py-[17px]">
-            <View className="flex-row items-center justify-between gap-[14px]">
-              <View className="gap-[5px]">
-                <View className="flex-row items-center gap-[8px]">
-                  <View className="h-[7px] w-[7px] rounded-full bg-neon-bright" />
-                  <Text className="text-[11px] font-black tracking-[1.7px] text-neon-bright">
-                    TWÓJ TYDZIEŃ
-                  </Text>
-                </View>
-                <Text className="text-[28px] font-black leading-[32px] text-neon-green">
-                  {sessionsLoading ? '…' : completedWorkouts}
-                  <Text className="text-[13px] font-medium text-text-muted">
-                    {' '}z {weeklyWorkoutGoal} {weeklyWorkoutGoal === 1 ? 'treningu' : 'treningów'}
-                  </Text>
-                </Text>
+          <ObsidianCard contentStyle={styles.weekCard}>
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2">
+                <View className="h-2 w-2 rounded-full bg-neon-lime" style={styles.weekDot} />
+                <Text className="text-[11px] font-black tracking-[2px] text-text-muted">TWÓJ TYDZIEŃ</Text>
               </View>
-              <View
-                className="w-[124px] flex-row gap-1"
-                accessibilityLabel={`${completedWorkouts} z ${weeklyWorkoutGoal} ${weeklyWorkoutGoal === 1 ? 'treningu' : 'treningów'}`}>
-                {Array.from({ length: weeklyWorkoutGoal }, (_, segment) => (
+              <Text className="text-[13px] font-semibold text-neon-lime">
+                {sessionsLoading ? '…' : completedWorkouts} / {weeklyWorkoutGoal} cel
+              </Text>
+            </View>
+            <View className="mt-4 flex-row justify-between">
+              {weekDays.map((day) => {
+                const variant = day.trained ? 'lit' : day.isToday ? 'today' : 'off';
+                return (
                   <View
-                    key={segment}
-                    className={`h-[5px] min-w-0 flex-1 rounded-full ${
-                      segment < completedWorkouts ? 'bg-neon-bright' : 'bg-white/[0.14]'
-                    }`}
-                    style={segment < completedWorkouts ? styles.progressGlow : undefined}
-                  />
-                ))}
-              </View>
+                    key={day.key}
+                    accessible
+                    accessibilityLabel={`${day.label}${day.isToday ? ', dzisiaj' : ''}${day.trained ? ', trening zrobiony' : ''}`}
+                    className="items-center gap-1">
+                    <GymFlame size={25} variant={variant} />
+                    <Text className={`text-[10px] font-bold ${day.isToday ? 'text-neon-lime' : 'text-text-muted'}`}>
+                      {day.label}
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
             {sessionsError ? (
-              <Text className="mt-[10px] text-[12px] leading-[18px] text-red-300">
+              <Text className="mt-3 text-[12px] leading-[18px] text-red-300">
                 Nie udało się pobrać postępów. Spróbuj odświeżyć ekran.
               </Text>
             ) : null}
-          </GlassCard>
+          </ObsidianCard>
 
           <HeroGlowCard>
             <View className="flex-row items-center justify-between gap-3">
@@ -475,6 +493,19 @@ export default function TrainingHomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  weekCard: {
+    gap: 0,
+    padding: 16,
+  },
+  weekDot: Platform.select({
+    web: { boxShadow: '0 0 10px rgba(163, 230, 53, 0.65)' } as ViewStyle,
+    default: {
+      shadowColor: '#A3E635',
+      shadowOpacity: 0.75,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 0 },
+    },
+  }),
   heroBorder: {
     borderRadius: HERO_RADIUS,
     padding: 1,
@@ -504,13 +535,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 44,
   },
-  progressGlow: Platform.select({
-    web: { boxShadow: '0 0 8px rgba(74, 222, 128, 0.4)' } as ViewStyle,
-    default: {
-      shadowColor: '#4ADE80',
-      shadowOpacity: 0.4,
-      shadowRadius: 7,
-      shadowOffset: { width: 0, height: 0 },
-    },
-  }),
 });
