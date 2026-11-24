@@ -72,6 +72,7 @@ export function AppBottomBar({
 
   return (
     <View
+      nativeID="app-bottom-bar"
       style={[
         styles.bar,
         {

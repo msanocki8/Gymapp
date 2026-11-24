@@ -95,6 +95,7 @@ export function AppSidePanel({ visible, onClose, plans, plansLoading = false, pl
           style={StyleSheet.absoluteFill}
         />
         <View
+          nativeID="app-side-panel"
           accessibilityViewIsModal
           style={[
             styles.panel,

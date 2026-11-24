@@ -5,8 +5,16 @@
 html,
 body,
 #root {
+  height: 100%;
   min-height: 100%;
-  background-color: #070908;
+  background-color: #050706;
+}
+
+/* Expo Router's web SafeAreaProvider reports zero insets, so use CSS env values for PWA. */
+#root {
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 body {
@@ -19,6 +27,15 @@ body {
     radial-gradient(ellipse at 73% 88%, rgba(181, 240, 102, 0.045), transparent 32rem);
 }
 
+#app-side-panel {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 24px) !important;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px) !important;
+}
+
+#exercise-info-sheet {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 9px) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+}
 * {
   scrollbar-color: #364333 transparent;
   scrollbar-width: thin;
