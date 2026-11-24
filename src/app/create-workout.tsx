@@ -139,7 +139,14 @@ function CreateWorkoutForm({ existingPlan }: { existingPlan?: WorkoutPlan }) {
   function addSet(exerciseIndex: number) {
     setExerciseConfigs((current) => current.map((exercise, index) =>
       index === exerciseIndex
-        ? { ...exercise, sets: [...exercise.sets, { weight: '', reps: '', previous: getPreviousPerformance(exercise.name, exercise.sets.length) }] }
+        ? {
+          ...exercise,
+          sets: [...exercise.sets, {
+            weight: exercise.sets[exercise.sets.length - 1]?.weight ?? '',
+            reps: exercise.sets[exercise.sets.length - 1]?.reps ?? '',
+            previous: getPreviousPerformance(exercise.name, exercise.sets.length),
+          }],
+        }
         : exercise));
   }
 

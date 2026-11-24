@@ -1,14 +1,32 @@
 import { SymbolView } from 'expo-symbols';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import type { ComponentRef } from 'react';
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import type { DimensionValue } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AmbientBackground } from '@/components/ambient-background';
 import { GlassPanel } from '@/components/glass-panel';
 import { GlassScreen } from '@/components/glass-screen';
-import { NeonText } from '@/components/neon-text';
+import { MuscleBars, ObsidianCard } from '@/components/obsidian-card';
+import { exerciseLibrary } from '@/constants/exercise-library';
 import { WorkoutSession, useGymApp } from '@/hooks/use-gym-app';
+import { calculateMuscleVolume } from '@/lib/muscle-volume';
+import { lastTrainedAtByArea, sumSetsByArea } from '@/lib/plan-muscles';
 
-function SessionDetails({ session, onBack }: { session: WorkoutSession; onBack: () => void }) {
+function SessionDetails({
+  session,
+  onBack,
+  onDelete,
+  deleting,
+}: {
+  session: WorkoutSession;
+  onBack: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
   const setCount = session.exercisePerformance?.reduce((total, exercise) => total + exercise.sets.length, 0) ?? 0;
 
   return (
@@ -192,6 +210,21 @@ function SessionDetails({ session, onBack }: { session: WorkoutSession; onBack: 
                 <Text className="mt-3 text-sm leading-5 text-white/80">{session.notes.trim()}</Text>
               </View>
             ) : null}
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Usuń trening ${session.name} z ${session.date}`}
+              accessibilityState={{ disabled: deleting }}
+              disabled={deleting}
+              onPress={onDelete}
+              className="min-h-[48px] flex-row items-center justify-center gap-2 rounded-2xl border border-red-400/35 bg-red-500/[0.08] active:opacity-80">
+              {deleting ? (
+                <ActivityIndicator color="#FCA5A5" />
+              ) : (
+                <SymbolView name={{ ios: 'trash', android: 'delete', web: 'delete' }} size={16} tintColor="#FCA5A5" />
+              )}
+              <Text className="text-sm font-extrabold text-red-300">Usuń trening</Text>
+            </Pressable>
           </View>
         </ScrollView>
       </View>
@@ -199,40 +232,99 @@ function SessionDetails({ session, onBack }: { session: WorkoutSession; onBack: 
   );
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEKS_SHOWN = 8;
+const MONTHS = ['STY', 'LUT', 'MAR', 'KWI', 'MAJ', 'CZE', 'LIP', 'SIE', 'WRZ', 'PAŹ', 'LIS', 'GRU'];
+
+function startOfWeek(date: Date) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  return start;
+}
+
+function weekDateLabel(date: Date) {
+  return `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function workoutCountForm(count: number) {
+  const lastTwoDigits = count % 100;
+  const lastDigit = count % 10;
+  if (count === 1) return 'trening';
+  if (lastDigit >= 2 && lastDigit <= 4 && (lastTwoDigits < 12 || lastTwoDigits > 14)) return 'treningi';
+  return 'treningów';
+}
+
+function setsLabel(count: number) {
+  const rounded = Number.isInteger(count) ? count : Math.round(count * 10) / 10;
+  if (rounded === 1) return '1 seria';
+  const whole = Math.floor(rounded);
+  if (whole === rounded && whole % 10 >= 2 && whole % 10 <= 4 && (whole % 100 < 12 || whole % 100 > 14)) return `${rounded} serie`;
+  return `${String(rounded).replace('.', ',')} serii`;
+}
+
 export default function HistoryScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const blurTarget = useRef<ComponentRef<typeof View>>(null);
   const { sessions, sessionsLoading, sessionsError, reloadSessions, deleteSession } = useGymApp();
   const [selectedSession, setSelectedSession] = useState<WorkoutSession | null>(null);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const today = new Date();
-  const activity = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(today);
-    date.setDate(today.getDate() - (6 - index));
-    date.setHours(0, 0, 0, 0);
-    const nextDay = date.getTime() + 24 * 60 * 60 * 1000;
+  const [chartMetric, setChartMetric] = useState<'minutes' | 'workouts'>('minutes');
+  const [now] = useState(() => Date.now());
+  const totalMinutes = sessions.reduce((total, session) => total + session.duration, 0);
+  const lastSevenDaysCount = sessions.filter((session) => session.completedAt >= now - 7 * DAY_MS).length;
+  const thisWeekStart = startOfWeek(new Date(now));
+  const weeks = Array.from({ length: WEEKS_SHOWN }, (_, index) => {
+    const start = new Date(thisWeekStart);
+    start.setDate(start.getDate() - (WEEKS_SHOWN - 1 - index) * 7);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    const inWeek = sessions.filter((session) => session.completedAt >= start.getTime() && session.completedAt < end.getTime());
     return {
-      label: ['N', 'P', 'W', 'Ś', 'C', 'P', 'S'][date.getDay()],
-      count: sessions.filter((session) => session.completedAt >= date.getTime() && session.completedAt < nextDay).length,
+      key: start.getTime(),
+      label: weekDateLabel(start),
+      minutes: inWeek.reduce((total, session) => total + session.duration, 0),
+      workouts: inWeek.length,
+      current: index === WEEKS_SHOWN - 1,
     };
   });
-  const weekSessionCount = activity.reduce((total, day) => total + day.count, 0);
-  const totalMinutes = sessions.reduce((total, session) => total + session.duration, 0);
-  const activityMax = Math.max(1, ...activity.map((day) => day.count));
-  const workoutCountForm = (count: number) => {
-    const lastTwoDigits = count % 100;
-    const lastDigit = count % 10;
-    if (count === 1) return 'trening';
-    if (lastDigit >= 2 && lastDigit <= 4 && (lastTwoDigits < 12 || lastTwoDigits > 14)) return 'treningi';
-    return 'treningów';
-  };
-  const savedWord = sessions.length === 1 ? 'zapisany' : sessions.length >= 2 && sessions.length <= 4 ? 'zapisane' : 'zapisanych';
+  const chartValues = weeks.map((week) => (chartMetric === 'minutes' ? week.minutes : week.workouts));
+  const chartMax = Math.max(1, ...chartValues);
+
+  const localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const areaSets = useMemo(() => sumSetsByArea(calculateMuscleVolume({
+    exercises: [],
+    sessions: sessions.map((session) => ({
+      completedAt: session.completedAt,
+      exercisePerformance: session.exercisePerformance?.map((exercise) => ({
+        exerciseId: exercise.exerciseId ?? exerciseLibrary.find((item) => item.name === exercise.name)?.id,
+        name: exercise.name,
+        sets: exercise.sets.map((set) => ({ ...set, completed: true })),
+      })),
+    })),
+    period: 'week',
+    timeZone: localTimeZone,
+  })), [sessions, localTimeZone]);
+  const lastTrained = useMemo(() => lastTrainedAtByArea(sessions), [sessions]);
+  const areaMax = Math.max(0, ...areaSets.map((area) => area.sets));
+  const neglected = areaSets
+    .filter((area) => area.sets === 0)
+    .map((area) => ({ ...area, last: lastTrained.get(area.key) }))
+    .sort((a, b) => (a.last ?? 0) - (b.last ?? 0))[0];
+  const neglectedText = neglected && sessions.length > 0
+    ? neglected.last
+      ? `${neglected.label} bez serii od ${Math.max(1, Math.floor((now - neglected.last) / DAY_MS))} dni`
+      : `${neglected.label} jeszcze bez żadnej serii`
+    : null;
 
   const removeSession = async (session: WorkoutSession) => {
     setDeletingSessionId(session.id);
     setDeleteError(null);
     try {
       await deleteSession(session.id);
+      setSelectedSession(null);
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : 'Nie udało się usunąć treningu.');
     } finally {
@@ -254,158 +346,291 @@ export default function HistoryScreen() {
   };
 
   if (selectedSession) {
-    return <SessionDetails session={selectedSession} onBack={() => setSelectedSession(null)} />;
+    return (
+      <SessionDetails
+        session={selectedSession}
+        onBack={() => setSelectedSession(null)}
+        onDelete={() => confirmRemoveSession(selectedSession)}
+        deleting={deletingSessionId === selectedSession.id}
+      />
+    );
   }
 
   return (
-    <GlassScreen edges={['top']}>
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        <View className="mx-auto w-full max-w-[560px] px-5 pb-10 pt-6">
-          <View className="mb-6 flex-row items-center justify-between">
-            <View>
-              <NeonText className="text-[10px] font-bold tracking-[2px]">STATYSTYKI</NeonText>
-              <Text className="mt-2 text-[32px] font-black tracking-tight text-white">Historia</Text>
-              <Text className="mt-1 text-sm text-white/50">Regularność robi robotę.</Text>
+    <SafeAreaView edges={['top']} style={styles.screen}>
+      <AmbientBackground blurTarget={blurTarget} />
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={{ paddingBottom: 130 + insets.bottom }}
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.page}>
+          <View style={styles.header}>
+            <View style={styles.flexShrink}>
+              <Text style={styles.eyebrow}>STATYSTYKI</Text>
+              <Text style={styles.title}>Historia</Text>
+              <Text style={styles.subtitle}>Regularność robi robotę.</Text>
             </View>
-            <View className="h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06]">
-              <SymbolView name={{ ios: 'chart.bar.xaxis', android: 'monitoring', web: 'monitoring' }} size={20} tintColor="#22C55E" />
+            <View style={styles.headerIcon}>
+              <SymbolView name={{ ios: 'chart.bar.xaxis', android: 'monitoring', web: 'monitoring' }} size={20} tintColor="#A3E635" />
             </View>
           </View>
 
-          <GlassPanel className="mb-4 rounded-[24px] py-5" delay={70} contentClassName="flex-row items-center">
-            <View className="flex-1 items-center gap-1">
-              <Text className="text-[26px] font-black text-white">{sessions.length}</Text>
-              <Text className="text-[9px] font-bold tracking-[1.2px] text-white/40">{workoutCountForm(sessions.length).toUpperCase()}</Text>
-            </View>
-            <View className="h-10 w-px bg-white/10" />
-            <View className="flex-1 items-center gap-1">
-              <Text className="text-[26px] font-black text-white">
-                {totalMinutes >= 60 ? `${Math.floor(totalMinutes / 60)}` : `${totalMinutes}`}
-                <Text className="text-sm text-white/45">{totalMinutes >= 60 ? ' h' : ' min'}</Text>
-              </Text>
-              <Text className="text-[9px] font-bold tracking-[1.2px] text-white/40">W RUCHU</Text>
-            </View>
-            <View className="h-10 w-px bg-white/10" />
-            <View className="flex-1 items-center gap-1">
-              <NeonText className="text-[26px] font-black">{weekSessionCount}</NeonText>
-              <Text className="text-[9px] font-bold tracking-[1.2px] text-white/40">TEN TYDZIEŃ</Text>
-            </View>
-          </GlassPanel>
+          <ObsidianCard radius={24} contentStyle={styles.statsRow}>
+            {[
+              { value: String(sessions.length), unit: '', label: workoutCountForm(sessions.length).toUpperCase(), color: '#A3E635' },
+              {
+                value: totalMinutes >= 60 ? String(Math.floor(totalMinutes / 60)) : String(totalMinutes),
+                unit: totalMinutes >= 60 ? ' h' : ' min',
+                label: 'W RUCHU',
+                color: '#4ADE80',
+              },
+              { value: String(lastSevenDaysCount), unit: '', label: 'OSTATNIE 7 DNI', color: '#BEF264' },
+            ].map((stat, index) => (
+              <View key={stat.label} style={[styles.stat, index < 2 && styles.statDivider]}>
+                <Text style={styles.statValue}>
+                  {sessionsLoading ? '…' : stat.value}
+                  <Text style={styles.statUnit}>{stat.unit}</Text>
+                </Text>
+                <Text numberOfLines={1} style={styles.statLabel}>{stat.label}</Text>
+                <View style={[styles.statLine, { backgroundColor: stat.color }]} />
+              </View>
+            ))}
+          </ObsidianCard>
 
-          <GlassPanel className="mb-7 rounded-[26px] p-5" delay={150}>
-            <View className="flex-row items-center justify-between">
-              <View>
-                <Text className="text-lg font-extrabold text-white">Aktywność</Text>
-                <Text className="mt-1 text-xs text-white/45">ostatnie 7 dni · {weekSessionCount} {workoutCountForm(weekSessionCount)}</Text>
+          <ObsidianCard radius={24} contentStyle={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={styles.flexShrink}>
+                <Text style={styles.cardTitle}>{chartMetric === 'minutes' ? 'Minuty' : 'Treningi'}</Text>
+                <Text style={styles.cardSubtitle}>ostatnie {WEEKS_SHOWN} tygodni</Text>
               </View>
-              <View className="h-10 w-10 items-center justify-center rounded-2xl bg-neon/10">
-                <SymbolView name={{ ios: 'bolt.fill', android: 'bolt', web: 'bolt' }} size={18} tintColor="#22C55E" />
+              <View accessibilityRole="tablist" style={styles.toggle}>
+                {(['workouts', 'minutes'] as const).map((metric) => {
+                  const selected = chartMetric === metric;
+                  return (
+                    <Pressable
+                      key={metric}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected }}
+                      onPress={() => setChartMetric(metric)}
+                      style={[styles.toggleItem, selected && styles.toggleItemOn]}>
+                      <Text style={[styles.toggleText, selected && styles.toggleTextOn]}>
+                        {metric === 'minutes' ? 'Minuty' : 'Treningi'}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             </View>
-            <View className="mt-6 h-36 flex-row justify-between gap-3">
-              {activity.map((day, index) => (
-                <View key={`${day.label}-${index}`} className="flex-1 items-center justify-end gap-2">
-                  <View className="w-full flex-1 items-center justify-end">
-                    <View
-                      className={`w-full max-w-[30px] rounded-full ${day.count > 0 ? 'bg-neon' : 'bg-white/10'}`}
-                      style={{ height: `${day.count > 0 ? Math.max(12, (day.count / activityMax) * 100) : 5}%` }}
-                    />
+            <View style={styles.chart}>
+              {weeks.map((week, index) => {
+                const value = chartValues[index];
+                return (
+                  <View
+                    key={week.key}
+                    style={styles.chartColumn}
+                    accessible
+                    accessibilityLabel={`Tydzień ${week.label}: ${value} ${chartMetric === 'minutes' ? 'minut' : workoutCountForm(value)}`}>
+                    {value > 0 ? <Text style={styles.chartValue}>{value}</Text> : null}
+                    {value > 0 ? (
+                      <LinearGradient
+                        colors={['#BEF264', '#22C55E']}
+                        style={[
+                          styles.chartBar,
+                          { height: `${Math.max(8, Math.round((value / chartMax) * 82))}%` as DimensionValue },
+                          week.current && styles.chartBarCurrent,
+                        ]}
+                      />
+                    ) : (
+                      <View style={styles.chartBarEmpty} />
+                    )}
+                    <Text style={[styles.chartLabel, week.current && styles.chartLabelCurrent]}>{week.label}</Text>
                   </View>
-                  <Text className={`text-[10px] font-bold ${day.count > 0 ? 'text-neon' : 'text-white/35'}`}>{day.label}</Text>
-                </View>
-              ))}
+                );
+              })}
             </View>
-          </GlassPanel>
+          </ObsidianCard>
 
-          <View className="mb-3 flex-row items-center justify-between">
-            <Text className="text-[20px] font-extrabold text-white">Ostatnie treningi</Text>
-            <Text className="text-xs font-semibold text-white/40">{sessions.length} {savedWord}</Text>
+          <ObsidianCard radius={24} contentStyle={styles.card}>
+            <Text style={styles.cardTitle}>Mięśnie w tym tygodniu</Text>
+            <Text style={styles.cardSubtitle}>serie główne + pomocnicze (0,5)</Text>
+            <View style={styles.musclesBars}>
+              <MuscleBars
+                labelWidth={74}
+                rows={areaSets.map((area) => ({
+                  key: area.key,
+                  label: area.label,
+                  share: areaMax > 0 ? area.sets / areaMax : 0,
+                  caption: setsLabel(area.sets),
+                }))}
+              />
+            </View>
+            {neglectedText ? <Text style={styles.warning}>{neglectedText}</Text> : null}
+          </ObsidianCard>
+
+          <View style={styles.sectionHeader}>
+            <View style={styles.flexShrink}>
+              <Text style={styles.eyebrow}>{sessions.length} {sessions.length === 1 ? 'ZAPISANY' : sessions.length >= 2 && sessions.length <= 4 ? 'ZAPISANE' : 'ZAPISANYCH'}</Text>
+              <Text style={styles.sectionTitle}>Ostatnie treningi</Text>
+            </View>
           </View>
           {deleteError ? (
-            <Text accessibilityRole="alert" className="mb-3 text-sm leading-5 text-red-200">{deleteError}</Text>
+            <Text accessibilityRole="alert" style={styles.errorText}>{deleteError}</Text>
           ) : null}
           {sessionsLoading ? (
-            <GlassPanel className="rounded-[22px] p-5">
-              <View className="flex-row items-center gap-3">
-                <ActivityIndicator color="#22C55E" />
-                <Text className="text-sm font-semibold text-white/65">Wczytywanie historii treningów…</Text>
-              </View>
-            </GlassPanel>
+            <ObsidianCard contentStyle={styles.infoCard}>
+              <ActivityIndicator color="#A3E635" />
+              <Text style={styles.infoText}>Wczytywanie historii treningów…</Text>
+            </ObsidianCard>
           ) : sessionsError ? (
-            <GlassPanel className="rounded-[22px] p-5">
-              <Text accessibilityRole="alert" className="text-sm leading-5 text-red-200">{sessionsError}</Text>
+            <ObsidianCard contentStyle={styles.errorCard}>
+              <Text accessibilityRole="alert" style={styles.errorText}>{sessionsError}</Text>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => { void reloadSessions(); }}
-                className="mt-4 min-h-[44px] items-center justify-center self-start rounded-xl bg-white/10 px-4">
-                <Text className="text-sm font-bold text-white">Spróbuj ponownie</Text>
+                style={styles.retryButton}>
+                <Text style={styles.retryText}>Spróbuj ponownie</Text>
               </Pressable>
-            </GlassPanel>
+            </ObsidianCard>
           ) : sessions.length > 0 ? (
-            <View className="gap-3">
-              {sessions.map((session, index) => (
-                <GlassPanel key={session.id} tone={index % 2 === 1 ? 'mint' : 'neutral'} delay={220 + index * 70} className="rounded-[22px]" contentClassName="flex-row items-start">
+            <View style={styles.list}>
+              {sessions.map((session) => {
+                const date = new Date(session.completedAt);
+                return (
                   <Pressable
+                    key={session.id}
                     accessibilityRole="button"
                     accessibilityLabel={`Zobacz szczegóły treningu ${session.name} z ${session.date}`}
                     onPress={() => setSelectedSession(session)}
-                    className="min-w-0 flex-1 flex-row items-start gap-3 p-4 active:bg-white/[0.04]">
-                    <View className={`h-12 w-12 items-center justify-center rounded-2xl ${index % 2 === 1 ? 'bg-mint/10' : 'bg-neon/10'}`}>
-                      <SymbolView name={{ ios: 'dumbbell.fill', android: 'fitness_center', web: 'fitness_center' }} size={20} tintColor={index % 2 === 1 ? '#83F3C0' : '#22C55E'} />
-                    </View>
-                    <View className="min-w-0 flex-1">
-                      <Text className="text-sm font-bold text-white">{session.name}</Text>
-                      <Text className="mt-1 text-[11px] text-white/45">{session.focus}</Text>
-                      <Text className="mt-1 text-[10px] text-white/30">{session.date}</Text>
-                      {session.notes?.trim() ? (
-                        <View className="mt-2 rounded-xl bg-white/[0.04] px-3 py-2">
-                          <Text className="text-[9px] font-bold tracking-wide text-white/40">NOTATKA</Text>
-                          <Text className="mt-1 text-xs leading-[17px] text-white/70" numberOfLines={3}>
-                            {session.notes.trim()}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <View className="items-end gap-1">
-                      <Text className="text-xs font-bold text-white">{session.duration} min</Text>
-                      <Text className="text-[9px] font-bold tracking-wide text-neon/70">
-                        {session.completedExercises}/{session.totalExercises} ĆW.
-                      </Text>
-                      <Text className="mt-1 text-[10px] font-bold text-white/40">SZCZEGÓŁY ›</Text>
-                    </View>
+                    style={({ pressed }) => pressed && styles.pressed}>
+                    <ObsidianCard contentStyle={styles.sessionRow}>
+                      <View style={styles.dateTile}>
+                        <Text style={styles.dateDay}>{date.getDate()}</Text>
+                        <Text style={styles.dateMonth}>{MONTHS[date.getMonth()]}</Text>
+                      </View>
+                      <View style={styles.sessionCopy}>
+                        <Text numberOfLines={1} style={styles.sessionTitle}>{session.name}</Text>
+                        <Text numberOfLines={1} style={styles.sessionFocus}>{session.focus}</Text>
+                      </View>
+                      <View style={styles.sessionMeta}>
+                        <Text style={styles.sessionDuration}>{session.duration} min</Text>
+                        <Text style={styles.sessionExercises}>{session.completedExercises}/{session.totalExercises} ćw.</Text>
+                      </View>
+                      <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} size={14} tintColor="#A3E635" />
+                    </ObsidianCard>
                   </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Usuń trening ${session.name} z ${session.date}`}
-                    accessibilityState={{ disabled: deletingSessionId === session.id }}
-                    disabled={deletingSessionId === session.id}
-                    onPress={() => confirmRemoveSession(session)}
-                    className="mr-2 mt-3 h-11 w-11 items-center justify-center rounded-xl active:bg-red-500/15">
-                    {deletingSessionId === session.id ? (
-                      <ActivityIndicator color="#FCA5A5" />
-                    ) : (
-                      <SymbolView name={{ ios: 'trash', android: 'delete', web: 'delete' }} size={18} tintColor="#FCA5A5" />
-                    )}
-                  </Pressable>
-                </GlassPanel>
-              ))}
+                );
+              })}
             </View>
           ) : (
-            <GlassPanel className="rounded-[22px] p-5">
-              <Text className="text-base font-extrabold text-white">Tu pojawi się Twój progres</Text>
-              <Text className="mt-2 text-sm leading-5 text-white/50">
+            <ObsidianCard contentStyle={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>Tu pojawi się Twój progres</Text>
+              <Text style={styles.emptyText}>
                 Zakończony trening zapisze się automatycznie. Na razie nie ma tu żadnych wpisów.
               </Text>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => router.push('/workout-flow')}
-                className="mt-5 min-h-[48px] items-center justify-center rounded-2xl bg-neon px-4">
-                <Text className="text-sm font-extrabold text-ink-950">Wybierz trening</Text>
+                style={styles.emptyButton}>
+                <Text style={styles.emptyButtonText}>Wybierz trening</Text>
               </Pressable>
-            </GlassPanel>
+            </ObsidianCard>
           )}
         </View>
       </ScrollView>
-    </GlassScreen>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { backgroundColor: '#000000', flex: 1, overflow: 'hidden' },
+  flex: { flex: 1 },
+  flexShrink: { flexShrink: 1, minWidth: 0 },
+  page: { alignSelf: 'center', gap: 12, maxWidth: 560, paddingHorizontal: 18, paddingTop: 20, width: '100%' },
+  header: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  eyebrow: { color: '#A3E635', fontSize: 10, fontWeight: '900', letterSpacing: 1.6 },
+  title: { color: '#F5F7F6', fontSize: 32, fontWeight: '900', letterSpacing: -0.8, marginTop: 4 },
+  subtitle: { color: '#8A948C', fontSize: 13.5, marginTop: 2 },
+  headerIcon: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(4,8,6,0.6)',
+    borderColor: 'rgba(163,230,53,0.3)',
+    borderRadius: 16,
+    borderWidth: 1,
+    height: 46,
+    justifyContent: 'center',
+    width: 46,
+  },
+  statsRow: { flexDirection: 'row', paddingVertical: 16 },
+  stat: { alignItems: 'center', flex: 1, minWidth: 0, paddingHorizontal: 4 },
+  statDivider: { borderRightColor: 'rgba(255,255,255,0.07)', borderRightWidth: 1 },
+  statValue: { color: '#F5F7F6', fontSize: 25, fontWeight: '900' },
+  statUnit: { color: '#7F8983', fontSize: 13, fontWeight: '700' },
+  statLabel: { color: '#7F8983', fontSize: 9.5, fontWeight: '800', letterSpacing: 0.9, marginTop: 2 },
+  statLine: { borderRadius: 2, height: 3, marginTop: 8, width: 26 },
+  card: { padding: 16 },
+  cardHeader: { alignItems: 'center', flexDirection: 'row', gap: 10, justifyContent: 'space-between' },
+  cardTitle: { color: '#F5F7F6', fontSize: 17, fontWeight: '900' },
+  cardSubtitle: { color: '#7F8983', fontSize: 12, marginTop: 2 },
+  toggle: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 999, flexDirection: 'row', padding: 3 },
+  toggleItem: { borderRadius: 999, justifyContent: 'center', minHeight: 32, paddingHorizontal: 11 },
+  toggleItemOn: { backgroundColor: 'rgba(163,230,53,0.16)' },
+  toggleText: { color: '#7F8983', fontSize: 11.5, fontWeight: '800' },
+  toggleTextOn: { color: '#D9F99D' },
+  chart: { alignItems: 'flex-end', flexDirection: 'row', gap: 7, height: 150, marginTop: 16 },
+  chartColumn: { alignItems: 'center', flex: 1, gap: 5, height: '100%', justifyContent: 'flex-end' },
+  chartValue: { color: '#C9D1CB', fontSize: 10, fontWeight: '800' },
+  chartBar: { borderTopLeftRadius: 8, borderTopRightRadius: 8, borderBottomLeftRadius: 4, borderBottomRightRadius: 4, width: '100%' },
+  chartBarCurrent: { borderColor: '#E8FFAA', borderWidth: 1.5 },
+  chartBarEmpty: { backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 4, height: 8, width: '100%' },
+  chartLabel: { color: '#7F8983', fontSize: 10, fontWeight: '800' },
+  chartLabelCurrent: { color: '#A3E635' },
+  musclesBars: { marginTop: 12 },
+  warning: { color: '#FACC15', fontSize: 12.5, fontWeight: '700', marginTop: 10 },
+  sectionHeader: { flexDirection: 'row', marginTop: 10 },
+  sectionTitle: { color: '#F5F7F6', fontSize: 19, fontWeight: '900', marginTop: 3 },
+  list: { gap: 10 },
+  sessionRow: { alignItems: 'center', flexDirection: 'row', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  dateTile: {
+    alignItems: 'center',
+    backgroundColor: '#0B0D0B',
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 6,
+    width: 46,
+  },
+  dateDay: { color: '#F5F7F6', fontSize: 17, fontWeight: '900', lineHeight: 19 },
+  dateMonth: { color: '#A3E635', fontSize: 9.5, fontWeight: '800', letterSpacing: 0.8 },
+  sessionCopy: { flex: 1, minWidth: 0 },
+  sessionTitle: { color: '#F5F7F6', fontSize: 15, fontWeight: '900' },
+  sessionFocus: { color: '#7F8983', fontSize: 12, marginTop: 2 },
+  sessionMeta: { alignItems: 'flex-end' },
+  sessionDuration: { color: '#F5F7F6', fontSize: 14, fontWeight: '900' },
+  sessionExercises: { color: '#4ADE80', fontSize: 11, fontWeight: '800', marginTop: 2 },
+  infoCard: { alignItems: 'center', flexDirection: 'row', gap: 12, padding: 18 },
+  infoText: { color: '#C9D1CB', fontSize: 13, fontWeight: '600' },
+  errorCard: { gap: 12, padding: 18 },
+  errorText: { color: '#FECACA', fontSize: 13, lineHeight: 19 },
+  retryButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    justifyContent: 'center',
+    minHeight: 44,
+    paddingHorizontal: 14,
+  },
+  retryText: { color: '#F5F7F6', fontSize: 13, fontWeight: '800' },
+  emptyCard: { gap: 8, padding: 18 },
+  emptyTitle: { color: '#F5F7F6', fontSize: 16, fontWeight: '900' },
+  emptyText: { color: '#8A948C', fontSize: 13, lineHeight: 19 },
+  emptyButton: {
+    alignItems: 'center',
+    backgroundColor: '#A3E635',
+    borderRadius: 16,
+    justifyContent: 'center',
+    marginTop: 8,
+    minHeight: 48,
+  },
+  emptyButtonText: { color: '#07150C', fontSize: 14, fontWeight: '900' },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.985 }] },
+});

@@ -9,12 +9,20 @@ import { copyWorkoutPlanShareUrl, getWorkoutPlanShareUrl } from '@/lib/workout-p
 type AppSidePanelProps = {
   visible: boolean;
   onClose: () => void;
+  onAiCoachPress: () => void;
   plans: WorkoutPlan[];
   plansLoading?: boolean;
   plansError?: string | null;
 };
 
-export function AppSidePanel({ visible, onClose, plans, plansLoading = false, plansError = null }: AppSidePanelProps) {
+export function AppSidePanel({
+  visible,
+  onClose,
+  onAiCoachPress,
+  plans,
+  plansLoading = false,
+  plansError = null,
+}: AppSidePanelProps) {
   const insets = useSafeAreaInsets();
   const [choosingPlan, setChoosingPlan] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -166,23 +174,42 @@ export function AppSidePanel({ visible, onClose, plans, plansLoading = false, pl
               )}
             </View>
           ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Udostępnij plan"
-              onPress={() => {
-                setFeedback(null);
-                setChoosingPlan(true);
-              }}
-              style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}>
-              <View style={styles.menuIcon}>
-                <SymbolView
-                  name={{ ios: 'square.and.arrow.up', android: 'share', web: 'share' }}
-                  size={18}
-                  tintColor="#A3E635"
-                />
-              </View>
-              <Text style={styles.menuItemLabel}>Udostępnij plan</Text>
-            </Pressable>
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Trener AI"
+                onPress={() => {
+                  closePanel();
+                  onAiCoachPress();
+                }}
+                style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}>
+                <View style={styles.menuIcon}>
+                  <SymbolView
+                    name={{ ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }}
+                    size={18}
+                    tintColor="#A3E635"
+                  />
+                </View>
+                <Text style={styles.menuItemLabel}>Trener AI</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Udostępnij plan"
+                onPress={() => {
+                  setFeedback(null);
+                  setChoosingPlan(true);
+                }}
+                style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}>
+                <View style={styles.menuIcon}>
+                  <SymbolView
+                    name={{ ios: 'square.and.arrow.up', android: 'share', web: 'share' }}
+                    size={18}
+                    tintColor="#A3E635"
+                  />
+                </View>
+                <Text style={styles.menuItemLabel}>Udostępnij plan</Text>
+              </Pressable>
+            </>
           )}
         </View>
       </View>

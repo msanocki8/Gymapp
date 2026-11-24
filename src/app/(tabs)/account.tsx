@@ -1,5 +1,5 @@
 import { SymbolView } from 'expo-symbols';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 
 import { GlassPanel } from '@/components/glass-panel';
@@ -7,18 +7,48 @@ import { GlassScreen } from '@/components/glass-screen';
 import { NeonText } from '@/components/neon-text';
 import { useAuth } from '@/hooks/use-auth';
 import { useGymApp } from '@/hooks/use-gym-app';
+import { getAiCoachApiKey, removeAiCoachApiKey, saveAiCoachApiKey } from '@/services/ai-coach-key-storage';
 import { countWorkoutsThisWeek, MAX_WEEKLY_WORKOUT_GOAL, MIN_WEEKLY_WORKOUT_GOAL } from '@/lib/workout-goal';
 
 export default function AccountScreen() {
   const { userName, setUserName, sessions } = useGymApp();
-  const { signOut, weeklyWorkoutGoal, setWeeklyWorkoutGoal } = useAuth();
+  const { signOut, user, weeklyWorkoutGoal, setWeeklyWorkoutGoal } = useAuth();
   const [nickDraft, setNickDraft] = useState(userName);
+  const [aiCoachKeyDraft, setAiCoachKeyDraft] = useState('');
+  const [savedAiCoachKey, setSavedAiCoachKey] = useState<{ userId: string; exists: boolean } | null>(null);
   const [remindersEnabled, setRemindersEnabled] = useState(true);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [savingNick, setSavingNick] = useState(false);
   const [savingGoal, setSavingGoal] = useState(false);
+  const [loadedAiCoachKeyFor, setLoadedAiCoachKeyFor] = useState<string | null>(null);
+  const [savingAiCoachKey, setSavingAiCoachKey] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const loadingAiCoachKey = Boolean(user?.id && user.id !== loadedAiCoachKeyFor);
+  const hasAiCoachKey = Boolean(
+    user?.id && savedAiCoachKey?.userId === user.id && savedAiCoachKey.exists,
+  );
   const completedThisWeek = Math.min(countWorkoutsThisWeek(sessions), weeklyWorkoutGoal);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!user?.id) return () => { isMounted = false; };
+
+    void getAiCoachApiKey(user.id).then((key) => {
+      if (isMounted) {
+        setSavedAiCoachKey({ userId: user.id, exists: Boolean(key) });
+        setAiCoachKeyDraft('');
+        setLoadedAiCoachKeyFor(user.id);
+      }
+    }).catch((error: unknown) => {
+      if (isMounted) {
+        setAccountError(error instanceof Error ? error.message : 'Nie udało się odczytać klucza API Trenera AI.');
+        setSavedAiCoachKey({ userId: user.id, exists: false });
+        setLoadedAiCoachKeyFor(user.id);
+      }
+    });
+
+    return () => { isMounted = false; };
+  }, [user?.id]);
 
   async function saveNick() {
     const nextNick = nickDraft.trim();
@@ -57,6 +87,36 @@ export default function AccountScreen() {
       setAccountError(error instanceof Error ? error.message : 'Nie udało się zapisać celu treningowego.');
     } finally {
       setSavingGoal(false);
+    }
+  }
+
+  async function saveAiCoachKey() {
+    if (!user?.id || savingAiCoachKey) return;
+    setAccountError(null);
+    setSavingAiCoachKey(true);
+    try {
+      await saveAiCoachApiKey(user.id, aiCoachKeyDraft);
+      setSavedAiCoachKey({ userId: user.id, exists: true });
+      setAiCoachKeyDraft('');
+    } catch (error) {
+      setAccountError(error instanceof Error ? error.message : 'Nie udało się zapisać klucza API Trenera AI.');
+    } finally {
+      setSavingAiCoachKey(false);
+    }
+  }
+
+  async function deleteAiCoachKey() {
+    if (!user?.id || savingAiCoachKey) return;
+    setAccountError(null);
+    setSavingAiCoachKey(true);
+    try {
+      await removeAiCoachApiKey(user.id);
+      setSavedAiCoachKey({ userId: user.id, exists: false });
+      setAiCoachKeyDraft('');
+    } catch (error) {
+      setAccountError(error instanceof Error ? error.message : 'Nie udało się usunąć klucza API Trenera AI.');
+    } finally {
+      setSavingAiCoachKey(false);
     }
   }
 
@@ -103,6 +163,66 @@ export default function AccountScreen() {
               <Text accessibilityRole="alert" className="text-sm leading-5 text-red-200">{accountError}</Text>
             </View>
           ) : null}
+
+          <GlassPanel className="mb-7 rounded-[24px] p-5" delay={110}>
+            <View className="flex-row items-center gap-3">
+              <View className="h-10 w-10 items-center justify-center rounded-2xl bg-neon/10">
+                <SymbolView name={{ ios: 'key.fill', android: 'key', web: 'key' }} size={18} tintColor="#22C55E" />
+              </View>
+              <View className="flex-1 gap-1">
+                <Text className="text-base font-extrabold text-white">Dodaj klucz API do Trenera AI</Text>
+                <Text className="text-[11px] leading-4 text-white/45">
+                  Opcjonalny klucz Google Gemini. Bez niego działa domyślny klucz aplikacji.
+                </Text>
+              </View>
+            </View>
+            <TextInput
+              accessibilityLabel="Klucz API Gemini"
+              value={aiCoachKeyDraft}
+              onChangeText={setAiCoachKeyDraft}
+              placeholder={hasAiCoachKey ? 'Wpisz nowy klucz, aby go zmienić' : 'Wklej klucz API Gemini'}
+              placeholderTextColor="#737E70"
+              selectionColor="#22C55E"
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+              maxLength={512}
+              editable={!loadingAiCoachKey && !savingAiCoachKey}
+              className="mt-4 min-h-12 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white"
+            />
+            <Text className="mt-2 text-[10px] leading-4 text-white/40">
+              {loadingAiCoachKey
+                ? 'Sprawdzanie ustawienia…'
+                : hasAiCoachKey
+                  ? 'Własny klucz jest zapisany na tym urządzeniu.'
+                  : 'Klucz nie jest zapisany — używany jest klucz aplikacji.'}
+            </Text>
+            <Text className="mt-1 text-[10px] leading-4 text-white/35">
+              Klucz jest przechowywany lokalnie i wysyłany przez HTTPS do Vercel tylko przy zapytaniu. W przeglądarce jest w pamięci przeglądarki, a w aplikacji mobilnej w bezpiecznym magazynie urządzenia.
+            </Text>
+            <View className="mt-4 flex-row gap-2">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: loadingAiCoachKey || savingAiCoachKey || !aiCoachKeyDraft.trim() }}
+                disabled={loadingAiCoachKey || savingAiCoachKey || !aiCoachKeyDraft.trim()}
+                onPress={() => { void saveAiCoachKey(); }}
+                className="min-h-11 flex-1 items-center justify-center rounded-xl bg-neon px-3 active:opacity-75 disabled:opacity-50">
+                {savingAiCoachKey
+                  ? <ActivityIndicator color="#08110A" />
+                  : <Text className="text-xs font-extrabold text-ink-950">Zapisz klucz</Text>}
+              </Pressable>
+              {hasAiCoachKey ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: savingAiCoachKey || loadingAiCoachKey }}
+                  disabled={savingAiCoachKey || loadingAiCoachKey}
+                  onPress={() => { void deleteAiCoachKey(); }}
+                  className="min-h-11 items-center justify-center rounded-xl border border-red-300/20 px-4 active:opacity-75 disabled:opacity-50">
+                  <Text className="text-xs font-bold text-red-200">Usuń</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </GlassPanel>
 
           <View className="mb-3 flex-row items-end justify-between">
             <Text className="text-[20px] font-extrabold text-white">Preferencje</Text>

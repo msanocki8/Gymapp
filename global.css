@@ -27,6 +27,24 @@ body {
     radial-gradient(ellipse at 73% 88%, rgba(181, 240, 102, 0.045), transparent 32rem);
 }
 
+html body .ai-coach-viewport {
+  position: fixed !important;
+  inset: 0 !important;
+  box-sizing: border-box !important;
+  padding-top: env(safe-area-inset-top, 0px) !important;
+  display: flex !important;
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  height: var(--ai-coach-viewport-height, 100vh) !important;
+  height: var(--ai-coach-viewport-height, 100dvh) !important;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+}
+
+.ai-coach-composer {
+  padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+}
+
 #app-side-panel {
   padding-top: calc(env(safe-area-inset-top, 0px) + 24px) !important;
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px) !important;
@@ -36,6 +54,11 @@ body {
   padding-top: calc(env(safe-area-inset-top, 0px) + 9px) !important;
   padding-bottom: env(safe-area-inset-bottom, 0px) !important;
 }
+
+.ai-coach-viewport #app-bottom-bar {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px) !important;
+}
+
 * {
   scrollbar-color: #364333 transparent;
   scrollbar-width: thin;

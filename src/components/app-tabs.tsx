@@ -36,6 +36,8 @@ export default function AppTabs() {
                 router.navigate(`/(tabs)/${tab}`);
               }
             }}
+            onStart={() => router.push('/workout-flow')}
+            onAiCoach={() => router.push('/ai-coach')}
           />
         );
       }}
@@ -45,7 +47,7 @@ export default function AppTabs() {
           backgroundColor: 'transparent',
           borderTopWidth: 0,
           elevation: 0,
-          height: 62 + insets.bottom,
+          height: 85 + insets.bottom,
           position: 'absolute',
         },
         sceneStyle: { backgroundColor: '#080B09' },

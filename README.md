@@ -40,9 +40,13 @@ The app uses [NativeWind](https://www.nativewind.dev/) with Tailwind CSS 3. Util
 
 Nick names are case-insensitive and limited to 3–24 ASCII letters, digits, `_`, or `-`. Passwords must be 8–128 characters. Native clients persist the Supabase session in Expo SecureStore; web clients use browser local storage. User-created plans are fetched by the signed-in user's ID and the database RLS policies independently enforce the same ownership boundary.
 
+The AI Coach sends chat history and workout-plan context to the authenticated `/api/coach` server route, which calls Gemini 3.5 Flash-Lite. Set `GEMINI_API_KEY` in the local `.env` for development and in the server environment for deployment. This key is server-only: never use an `EXPO_PUBLIC_` prefix or commit its value. The route also verifies the caller's Supabase access token before using Gemini.
+
 ### Deploying the web app to Vercel
 
 Vercel does not read your local `.env` file. In the Vercel project's **Settings → Environment Variables**, add `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` using the values from the Supabase project's API settings. Apply them to the environments you deploy (Production, and Preview if needed), then redeploy so Expo can embed them in the web build. Use only the public publishable/anon key; never add the service-role key. The Vercel build now stops with an explicit error if either variable is missing.
+
+Add `GEMINI_API_KEY` separately as a server environment variable for Production, Preview, and Development. It must not have the `EXPO_PUBLIC_` prefix. With the Vercel CLI, run `npx vercel env add GEMINI_API_KEY production`, then repeat for `preview` and `development`; enter the key only at the CLI prompt. The API route is deployed through the Expo Router Vercel adapter configured in `api/index.ts` and `vercel.json`.
 
 ## Get a fresh project
 

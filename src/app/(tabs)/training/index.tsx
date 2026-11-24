@@ -10,6 +10,7 @@ import {
   useState,
   type ComponentProps,
   type ComponentRef,
+  type ReactNode,
   type RefObject,
 } from 'react';
 import {
@@ -24,14 +25,16 @@ import {
 import type { ScrollViewInstance, ViewStyle } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import glassTokens from '@/constants/glass-tokens.json';
 import { AmbientBackground } from '@/components/ambient-background';
 import { AppSidePanel } from '@/components/app-side-panel';
-import { GradientText } from '@/components/gradient-text';
+import { ObsidianCard } from '@/components/obsidian-card';
 import { useGymApp } from '@/hooks/use-gym-app';
 import type { WorkoutPlan } from '@/hooks/use-gym-app';
 import { useAuth } from '@/hooks/use-auth';
 import { countWorkoutsThisWeek } from '@/lib/workout-goal';
+import { FilledPlayIcon } from '@/components/filled-play-icon';
 
 type CrossPlatformShadowStyle = ViewStyle & { boxShadow?: string };
 
@@ -45,15 +48,53 @@ const cardShadow: CrossPlatformShadowStyle = Platform.OS === 'web'
       elevation: 4,
     };
 
-const startButtonGlow: CrossPlatformShadowStyle = Platform.OS === 'web'
-  ? { boxShadow: '0 0 26px rgba(163, 230, 53, 0.58)' }
+const softStartButtonGlow: CrossPlatformShadowStyle = Platform.OS === 'web'
+  ? { boxShadow: '0 0 16px rgba(163, 230, 53, 0.32), 0 8px 22px rgba(163, 230, 53, 0.16)' }
   : {
       shadowColor: '#A3E635',
-      shadowOpacity: 0.6,
-      shadowRadius: 18,
-      shadowOffset: { width: 0, height: 0 },
-      elevation: 10,
+      shadowOpacity: 0.35,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 6,
     };
+
+const HERO_RADIUS = 40;
+const heroBorderGradient = [glassTokens.colors.glass.border, 'rgba(255,255,255,0.08)', 'rgba(134,239,172,0.30)'] as const;
+const heroFillGradient = ['#000000', '#000000', '#020F06', '#041C0B', '#06331A'] as const;
+const heroFillLocations = [0, 0.4, 0.6, 0.78, 1] as const;
+
+function HeroGlowCard({ children }: { children: ReactNode }) {
+  return (
+    <LinearGradient colors={heroBorderGradient} locations={[0, 0.5, 1]} style={styles.heroBorder}>
+      <View style={styles.heroInner}>
+        <LinearGradient
+          pointerEvents="none"
+          colors={heroFillGradient}
+          locations={heroFillLocations}
+          style={StyleSheet.absoluteFill}
+        />
+        <Svg
+          pointerEvents="none"
+          width="100%"
+          height="100%"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          style={StyleSheet.absoluteFill}>
+          <Defs>
+            <RadialGradient id="heroGlow" cx="52" cy="96" rx="70" ry="40" fx="52" fy="96" gradientUnits="userSpaceOnUse">
+              <Stop offset="0" stopColor="rgb(100,165,56)" stopOpacity="0.6" />
+              <Stop offset="0.22" stopColor="rgb(80,145,42)" stopOpacity="0.5" />
+              <Stop offset="0.5" stopColor="rgb(44,110,36)" stopOpacity="0.3" />
+              <Stop offset="0.8" stopColor="rgb(20,90,34)" stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100" height="100" fill="url(#heroGlow)" />
+        </Svg>
+        <View style={styles.heroContent}>{children}</View>
+      </View>
+    </LinearGradient>
+  );
+}
 
 const blurMethod = Platform.OS === 'android' ? 'dimezisBlurViewSdk31Plus' : undefined;
 const LocalBlurTargetContext = createContext<RefObject<ComponentRef<typeof View> | null> | null>(null);
@@ -61,16 +102,6 @@ const cardTopGradient = [
   glassTokens.gradients.cardTop[0],
   glassTokens.gradients.cardTop[1],
   glassTokens.gradients.cardTop[2],
-] as const;
-const planGradient = [
-  glassTokens.gradients.plan[0],
-  glassTokens.gradients.plan[1],
-  glassTokens.gradients.plan[2],
-] as const;
-const planAccentGradient = [
-  glassTokens.gradients.planAccent[0],
-  glassTokens.gradients.planAccent[1],
-  glassTokens.gradients.planAccent[2],
 ] as const;
 const startButtonGradient = [
   glassTokens.gradients.startButton[0],
@@ -108,12 +139,10 @@ function GlassCard({
   children,
   className = '',
   contentClassName = '',
-  plan = false,
 }: {
   children: React.ReactNode;
   className?: string;
   contentClassName?: string;
-  plan?: boolean;
 }) {
   const blurTarget = useContext(LocalBlurTargetContext);
 
@@ -133,25 +162,13 @@ function GlassCard({
       ) : null}
       <LinearGradient
         pointerEvents="none"
-        colors={plan
-          ? planGradient
-          : cardTopGradient}
+        colors={cardTopGradient}
         locations={[0, 0.52, 1]}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: plan ? 0.8 : 1 }}
+        end={{ x: 1, y: 1 }}
         className="absolute inset-0"
         style={{ borderRadius: 26 }}
       />
-      {plan ? (
-        <LinearGradient
-          pointerEvents="none"
-          colors={planAccentGradient}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          className="absolute bottom-0 left-0 top-0 w-1/2"
-          style={{ borderRadius: 26 }}
-        />
-      ) : null}
       <View className={`relative z-10 ${contentClassName}`}>{children}</View>
     </View>
   );
@@ -164,46 +181,37 @@ function WorkoutPlanCard({
   workout: WorkoutPlan;
   onPress: () => void;
 }) {
-  const exerciseCount = workout.exercises.length;
-
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Otwórz plan ${workout.name}`}
       onPress={onPress}
       className="w-full active:opacity-80">
-      <GlassCard plan contentClassName="flex-row items-center gap-[10px] px-[14px] py-[12px]">
-        <View className="h-[46px] w-[46px] items-center justify-center rounded-[16px] border border-white/10 bg-white/[0.09]">
+      <ObsidianCard contentStyle={styles.planContent}>
+        <View style={styles.planIcon}>
           <AppIcon
             name={{ ios: 'dumbbell.fill', android: 'fitness_center', web: 'fitness_center' }}
             size={19}
             color="#F0ABFC"
           />
         </View>
-        <View className="min-w-0 flex-1 gap-1">
+        <View className="min-w-0 flex-1 gap-[3px]">
           <Text numberOfLines={1} className="text-[15px] font-black text-text-primary">
             {workout.name}
+          </Text>
+          <Text numberOfLines={1} className="text-[12px] text-text-muted">
+            {formatDuration(workout.duration)} · {formatExerciseCount(workout.exercises.length)}
           </Text>
           <Text numberOfLines={1} className="text-[12px] text-text-muted">
             {workout.focus}
           </Text>
         </View>
-        <View className="shrink-0 flex-row items-center gap-[9px]">
-          <View className="items-end gap-1">
-            <Text numberOfLines={1} className="text-[13px] font-extrabold text-text-primary">
-              {formatDuration(workout.duration)}
-            </Text>
-            <Text numberOfLines={1} className="text-[12px] text-text-muted">
-              {formatExerciseCount(exerciseCount)}
-            </Text>
-          </View>
-          <AppIcon
-            name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-            size={14}
-            color="#4ADE80"
-          />
-        </View>
-      </GlassCard>
+        <AppIcon
+          name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+          size={14}
+          color="#A3E635"
+        />
+      </ObsidianCard>
     </Pressable>
   );
 }
@@ -247,7 +255,7 @@ export default function TrainingHomeScreen() {
             flexGrow: 1,
             paddingHorizontal: 20,
             paddingTop: 16,
-            paddingBottom: 34 + insets.bottom,
+            paddingBottom: 130 + insets.bottom,
           }}
           showsVerticalScrollIndicator={false}>
         <View className="mx-auto w-full max-w-[560px] gap-[22px]">
@@ -280,11 +288,9 @@ export default function TrainingHomeScreen() {
             </Pressable>
           </View>
 
-          <View className="min-w-0">
-            <GradientText>Dzień dobry,</GradientText>
-            <GradientText>{userName}</GradientText>
-            <Text className="mt-[6px] text-[14px] leading-[21px] text-text-muted">
-              Gotowy na jeszcze jeden dobry dzień? ✨
+          <View className="min-w-0 py-[2px]">
+            <Text className="text-[26px] font-extrabold leading-[32px] tracking-[-0.7px] text-text-primary">
+              Cześć, <Text className="text-neon-lime">{userName}</Text>
             </Text>
           </View>
 
@@ -325,7 +331,7 @@ export default function TrainingHomeScreen() {
             ) : null}
           </GlassCard>
 
-          <GlassCard className="border-white/[0.16]" contentClassName="w-full p-[21px]">
+          <HeroGlowCard>
             <View className="flex-row items-center justify-between gap-3">
               <View className="flex-row items-center gap-[8px] rounded-full border border-neon-bright/30 bg-neon-green/10 px-[12px] py-[8px]">
                 <View className="h-[7px] w-[7px] rounded-full bg-neon-lime" />
@@ -349,7 +355,7 @@ export default function TrainingHomeScreen() {
               Nawet najmniejszy ruch się liczy. Załóż buty i idź po swoje.
             </Text>
             <View className="mt-[20px] gap-[14px]">
-              <View className="w-full overflow-visible rounded-full" style={startButtonGlow}>
+              <View className="w-full overflow-visible rounded-full" style={softStartButtonGlow}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Rozpocznij trening"
@@ -361,11 +367,7 @@ export default function TrainingHomeScreen() {
                     start={{ x: 0, y: 0.5 }}
                     end={{ x: 1, y: 0.5 }}
                     className="min-h-[56px] w-full flex-row items-center justify-center gap-[11px] rounded-full px-4">
-                    <AppIcon
-                      name={{ ios: 'play.fill', android: 'play_arrow', web: 'play_arrow' }}
-                      size={17}
-                      color="#07150C"
-                    />
+                    <FilledPlayIcon size={17} color="#07150C" />
                     <Text className="text-[16px] font-black text-[#07150C]">
                       Rozpocznij trening
                     </Text>
@@ -383,7 +385,7 @@ export default function TrainingHomeScreen() {
                 </Text>
               </View>
             </View>
-          </GlassCard>
+          </HeroGlowCard>
 
           <View className="gap-[13px]">
             <View className="flex-row items-end justify-between gap-[10px] px-px">
@@ -460,6 +462,7 @@ export default function TrainingHomeScreen() {
       <AppSidePanel
         visible={isMenuOpen}
         onClose={() => setIsMenuOpen(false)}
+        onAiCoachPress={() => router.push('/ai-coach')}
         plans={plans}
         plansLoading={plansLoading}
         plansError={plansError}
@@ -469,6 +472,35 @@ export default function TrainingHomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  heroBorder: {
+    borderRadius: HERO_RADIUS,
+    padding: 1,
+    width: '100%',
+  },
+  heroInner: {
+    borderRadius: HERO_RADIUS - 1,
+    overflow: 'hidden',
+  },
+  heroContent: {
+    padding: 25,
+  },
+  planContent: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+  planIcon: {
+    alignItems: 'center',
+    backgroundColor: '#0E110F',
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 14,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
   progressGlow: Platform.select({
     web: { boxShadow: '0 0 8px rgba(74, 222, 128, 0.4)' } as ViewStyle,
     default: {

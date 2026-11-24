@@ -11,6 +11,10 @@ module.exports = defineConfig([
 					project: './tsconfig.json',
 				},
 			},
+			'import/ignore': [
+				'node_modules[\\\\/]+@?react-native',
+				'^expo-haptics$',
+			],
 		},
 	},
 ]);
