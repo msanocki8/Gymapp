@@ -16,6 +16,7 @@ import type { ScrollViewInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AmbientBackground } from '@/components/ambient-background';
+import { APP_BOTTOM_BAR_CONTENT_HEIGHT, AppBottomBar } from '@/components/app-bottom-bar';
 import { useAuth } from '@/hooks/use-auth';
 import { useGymApp } from '@/hooks/use-gym-app';
 import {
@@ -202,7 +203,7 @@ export default function AiCoachScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
         style={styles.keyboardAvoiding}>
-        <View style={styles.page}>
+        <View style={[styles.page, { paddingBottom: APP_BOTTOM_BAR_CONTENT_HEIGHT + insets.bottom }]}>
           <View style={styles.header}>
             <Pressable
               accessibilityRole="button"
@@ -368,6 +369,18 @@ export default function AiCoachScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+      <AppBottomBar
+        activeTab={null}
+        aiActive
+        bottomInset={insets.bottom}
+        onNavigate={(tab) => {
+          if (tab === 'training') router.replace('/(tabs)/training');
+          if (tab === 'history') router.replace('/(tabs)/history');
+          if (tab === 'account') router.replace('/(tabs)/account');
+        }}
+        onStart={() => router.push('/workout-flow')}
+        onAiCoach={() => undefined}
+      />
     </SafeAreaView>
   );
 }

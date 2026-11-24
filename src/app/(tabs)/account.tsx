@@ -4,13 +4,16 @@ import { ActivityIndicator, Pressable, ScrollView, Switch, Text, TextInput, View
 
 import { GlassPanel } from '@/components/glass-panel';
 import { GlassScreen } from '@/components/glass-screen';
+import { APP_BOTTOM_BAR_CONTENT_HEIGHT } from '@/components/app-bottom-bar';
 import { NeonText } from '@/components/neon-text';
 import { useAuth } from '@/hooks/use-auth';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGymApp } from '@/hooks/use-gym-app';
 import { getAiCoachApiKey, removeAiCoachApiKey, saveAiCoachApiKey } from '@/services/ai-coach-key-storage';
 import { countWorkoutsThisWeek, MAX_WEEKLY_WORKOUT_GOAL, MIN_WEEKLY_WORKOUT_GOAL } from '@/lib/workout-goal';
 
 export default function AccountScreen() {
+  const insets = useSafeAreaInsets();
   const { userName, setUserName, sessions } = useGymApp();
   const { signOut, user, weeklyWorkoutGoal, setWeeklyWorkoutGoal } = useAuth();
   const [nickDraft, setNickDraft] = useState(userName);
@@ -124,6 +127,7 @@ export default function AccountScreen() {
     <GlassScreen edges={['top']}>
       <ScrollView
         className="flex-1"
+        contentContainerStyle={{ paddingBottom: APP_BOTTOM_BAR_CONTENT_HEIGHT + insets.bottom }}
         showsVerticalScrollIndicator={false}>
         <View className="mx-auto w-full max-w-[560px] px-5 pb-10 pt-6">
           <Text className="text-[10px] font-bold tracking-[2px] text-neon">TWOJE MIEJSCE</Text>
