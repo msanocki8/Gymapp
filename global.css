@@ -14,7 +14,7 @@ body,
 #root {
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: 0;
 }
 
 body {
@@ -42,21 +42,21 @@ html body .ai-coach-viewport {
 }
 
 .ai-coach-composer {
-  padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  padding-bottom: 0 !important;
 }
 
 #app-side-panel {
   padding-top: calc(env(safe-area-inset-top, 0px) + 24px) !important;
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px) !important;
+  padding-bottom: 0 !important;
 }
 
 #exercise-info-sheet {
   padding-top: calc(env(safe-area-inset-top, 0px) + 9px) !important;
-  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  padding-bottom: 0 !important;
 }
 
-.ai-coach-viewport #app-bottom-bar {
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px) !important;
+#app-bottom-bar {
+  padding-bottom: 0 !important;
 }
 
 * {
