@@ -5,7 +5,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { ComponentRef } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { DimensionValue } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AmbientBackground } from '@/components/ambient-background';
 import { GlassPanel } from '@/components/glass-panel';
@@ -265,7 +265,6 @@ function setsLabel(count: number) {
 
 export default function HistoryScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const blurTarget = useRef<ComponentRef<typeof View>>(null);
   const { sessions, sessionsLoading, sessionsError, reloadSessions, deleteSession } = useGymApp();
   const [selectedSession, setSelectedSession] = useState<WorkoutSession | null>(null);
@@ -361,7 +360,6 @@ export default function HistoryScreen() {
       <AmbientBackground blurTarget={blurTarget} />
       <ScrollView
         style={styles.flex}
-        contentContainerStyle={{ paddingBottom: 130 + insets.bottom }}
         showsVerticalScrollIndicator={false}>
         <View style={styles.page}>
           <View style={styles.header}>

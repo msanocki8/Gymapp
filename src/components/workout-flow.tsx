@@ -17,9 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SymbolView } from 'expo-symbols';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppBottomBar } from '@/components/app-bottom-bar';
 import { AppSidePanel } from '@/components/app-side-panel';
 import { MuscleBars, ObsidianCard } from '@/components/obsidian-card';
 import { useGymApp } from '@/hooks/use-gym-app';
@@ -279,7 +277,6 @@ export function WorkoutFlow() {
     sessionsError,
   } = useGymApp();
   const { weeklyWorkoutGoal } = useAuth();
-  const insets = useSafeAreaInsets();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [openPlanMenuId, setOpenPlanMenuId] = useState<string | null>(null);
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
@@ -347,7 +344,7 @@ export function WorkoutFlow() {
       <View style={styles.screenContent}>
         <ScrollView
           style={workoutStyles.page}
-          contentContainerStyle={[styles.pageContent, { paddingBottom: 130 + insets.bottom }]}
+          contentContainerStyle={styles.pageContent}
           showsVerticalScrollIndicator={false}>
           <View className="w-full min-w-0 self-center" style={styles.page}>
             <View style={styles.pageHeader}>
@@ -529,23 +526,13 @@ export function WorkoutFlow() {
             ) : null}
           </View>
         </ScrollView>
-        <AppBottomBar
-          activeTab={null}
-          startActive
-          bottomInset={insets.bottom}
-          onNavigate={(tab) => {
-            if (tab === 'training') returnToTraining();
-            if (tab === 'history') router.replace('/(tabs)/history');
-            if (tab === 'account') router.replace('/(tabs)/account');
-          }}
-          onStart={() => undefined}
-          onAiCoach={() => router.push('/ai-coach')}
-        />
       </View>
       <AppSidePanel
         visible={isMenuOpen}
         onClose={() => setIsMenuOpen(false)}
         onAiCoachPress={() => router.push('/ai-coach')}
+        onHistoryPress={() => router.push('/(tabs)/history')}
+        onAccountPress={() => router.push('/(tabs)/account')}
         plans={plans}
         plansLoading={plansLoading}
         plansError={plansError}

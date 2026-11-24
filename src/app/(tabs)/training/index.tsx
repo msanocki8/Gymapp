@@ -24,7 +24,7 @@ import {
 } from 'react-native';
 import type { ScrollViewInstance, ViewStyle } from 'react-native';
 import { SymbolView } from 'expo-symbols';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import glassTokens from '@/constants/glass-tokens.json';
 import { AmbientBackground } from '@/components/ambient-background';
@@ -218,7 +218,6 @@ function WorkoutPlanCard({
 
 export default function TrainingHomeScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const scrollRef = useRef<ScrollViewInstance>(null);
   const blurTarget = useRef<ComponentRef<typeof View>>(null);
@@ -255,7 +254,6 @@ export default function TrainingHomeScreen() {
             flexGrow: 1,
             paddingHorizontal: 20,
             paddingTop: 16,
-            paddingBottom: 130 + insets.bottom,
           }}
           showsVerticalScrollIndicator={false}>
         <View className="mx-auto w-full max-w-[560px] gap-[22px]">
@@ -463,6 +461,8 @@ export default function TrainingHomeScreen() {
         visible={isMenuOpen}
         onClose={() => setIsMenuOpen(false)}
         onAiCoachPress={() => router.push('/ai-coach')}
+        onHistoryPress={() => router.push('/(tabs)/history')}
+        onAccountPress={() => router.push('/(tabs)/account')}
         plans={plans}
         plansLoading={plansLoading}
         plansError={plansError}

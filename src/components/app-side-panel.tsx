@@ -10,6 +10,8 @@ type AppSidePanelProps = {
   visible: boolean;
   onClose: () => void;
   onAiCoachPress: () => void;
+  onHistoryPress: () => void;
+  onAccountPress: () => void;
   plans: WorkoutPlan[];
   plansLoading?: boolean;
   plansError?: string | null;
@@ -19,6 +21,8 @@ export function AppSidePanel({
   visible,
   onClose,
   onAiCoachPress,
+  onHistoryPress,
+  onAccountPress,
   plans,
   plansLoading = false,
   plansError = null,
@@ -175,6 +179,40 @@ export function AppSidePanel({
             </View>
           ) : (
             <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Historia treningów"
+                onPress={() => {
+                  closePanel();
+                  onHistoryPress();
+                }}
+                style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}>
+                <View style={styles.menuIcon}>
+                  <SymbolView
+                    name={{ ios: 'chart.bar.xaxis', android: 'monitoring', web: 'monitoring' }}
+                    size={18}
+                    tintColor="#A3E635"
+                  />
+                </View>
+                <Text style={styles.menuItemLabel}>Historia</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Konto"
+                onPress={() => {
+                  closePanel();
+                  onAccountPress();
+                }}
+                style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}>
+                <View style={styles.menuIcon}>
+                  <SymbolView
+                    name={{ ios: 'person.crop.circle', android: 'account_circle', web: 'account_circle' }}
+                    size={18}
+                    tintColor="#A3E635"
+                  />
+                </View>
+                <Text style={styles.menuItemLabel}>Konto</Text>
+              </Pressable>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Trener AI"

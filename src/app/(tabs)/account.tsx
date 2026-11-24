@@ -124,7 +124,6 @@ export default function AccountScreen() {
     <GlassScreen edges={['top']}>
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}>
         <View className="mx-auto w-full max-w-[560px] px-5 pb-10 pt-6">
           <Text className="text-[10px] font-bold tracking-[2px] text-neon">TWOJE MIEJSCE</Text>
