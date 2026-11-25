@@ -9,6 +9,7 @@ import Animated, {
   useSharedValue,
   withRepeat,
   withSequence,
+  withDelay,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
@@ -21,14 +22,17 @@ import { activeWorkout, useActiveWorkout } from '@/lib/active-workout-store';
 const NOTCH_WIDTH = 126;
 const NOTCH_HEIGHT = 37;
 const NOTCH_TOP = 11;
+// Nasz blok zaczyna się 6 px nad fizyczną wyspą, żeby jej czarny kształt nie zasłaniał zielonej ramki.
+const ISLAND_TOP = 5;
 const ISLAND_WIDTH = 160;
-const ISLAND_HEIGHT = 92;
+const ISLAND_HEIGHT = 97;
 const COMPACT_HEIGHT = 54;
 const RING = 42;
 const RING_STROKE = 4;
 const RING_RADIUS = (RING - RING_STROKE) / 2;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
-const SPRING = { damping: 14, stiffness: 170, mass: 0.9 };
+// Wolniejsza, płynna sprężyna (bez „podskoku”).
+const SPRING = { damping: 20, stiffness: 90, mass: 1 };
 
 type CrossPlatformShadow = ViewStyle & { boxShadow?: string };
 const glowShadow: CrossPlatformShadow = Platform.select<CrossPlatformShadow>({
@@ -90,22 +94,23 @@ export function WorkoutDynamicIsland() {
 
   // Na iPhonie z wycięciem (PWA) wyspa wyrasta z wycięcia; bez wycięcia – zwykła pigułka pod paskiem stanu.
   const overNotch = Platform.OS === 'web' && insets.top >= 40;
-  const top = overNotch ? NOTCH_TOP : insets.top + 8;
+  const top = overNotch ? ISLAND_TOP : insets.top + 8;
   const fullHeight = overNotch ? ISLAND_HEIGHT : COMPACT_HEIGHT;
-  const contentTop = overNotch ? NOTCH_HEIGHT + 5 : 6;
+  // Treść zawsze pod fizyczną wyspą (jej dół = NOTCH_TOP + NOTCH_HEIGHT).
+  const contentTop = overNotch ? NOTCH_TOP + NOTCH_HEIGHT - ISLAND_TOP + 5 : 6;
 
   const width = useSharedValue(NOTCH_WIDTH);
-  const height = useSharedValue(overNotch ? NOTCH_HEIGHT : 0);
+  const height = useSharedValue(overNotch ? NOTCH_HEIGHT + NOTCH_TOP - ISLAND_TOP : 0);
   const opacity = useSharedValue(0);
   const contentOpacity = useSharedValue(0);
   const breath = useSharedValue(0.35);
 
   useEffect(() => {
     if (visible) {
-      opacity.set(withTiming(1, { duration: reducedMotion ? 0 : 120 }));
+      opacity.set(withTiming(1, { duration: reducedMotion ? 0 : 280, easing: Easing.out(Easing.quad) }));
       width.set(reducedMotion ? ISLAND_WIDTH : withSpring(ISLAND_WIDTH, SPRING));
       height.set(reducedMotion ? fullHeight : withSpring(fullHeight, SPRING));
-      contentOpacity.set(withTiming(1, { duration: reducedMotion ? 0 : 220 }));
+      contentOpacity.set(reducedMotion ? 1 : withDelay(260, withTiming(1, { duration: 380, easing: Easing.out(Easing.quad) })));
       if (!reducedMotion) {
         breath.set(withRepeat(withSequence(
           withTiming(0.9, { duration: 1500, easing: Easing.inOut(Easing.sin) }),
@@ -113,10 +118,10 @@ export function WorkoutDynamicIsland() {
         ), -1));
       }
     } else {
-      contentOpacity.set(withTiming(0, { duration: reducedMotion ? 0 : 100 }));
-      width.set(withTiming(NOTCH_WIDTH, { duration: reducedMotion ? 0 : 240 }));
-      height.set(withTiming(overNotch ? NOTCH_HEIGHT : 0, { duration: reducedMotion ? 0 : 240 }));
-      opacity.set(withTiming(0, { duration: reducedMotion ? 0 : 260 }));
+      contentOpacity.set(withTiming(0, { duration: reducedMotion ? 0 : 160 }));
+      width.set(withTiming(NOTCH_WIDTH, { duration: reducedMotion ? 0 : 360, easing: Easing.inOut(Easing.quad) }));
+      height.set(withTiming(overNotch ? NOTCH_HEIGHT + NOTCH_TOP - ISLAND_TOP : 0, { duration: reducedMotion ? 0 : 360, easing: Easing.inOut(Easing.quad) }));
+      opacity.set(withTiming(0, { duration: reducedMotion ? 0 : 380 }));
       breath.set(0.35);
     }
   }, [visible, reducedMotion, fullHeight, overNotch, width, height, opacity, contentOpacity, breath]);

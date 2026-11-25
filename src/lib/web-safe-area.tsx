@@ -35,6 +35,15 @@ export function WebSafeAreaInsets({ children }: PropsWithChildren) {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
     const update = () => {
+      // Pełna wysokość ekranu dla #root (iOS PWA zaniża innerHeight o pasek stanu).
+      const standalone = (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+        || window.matchMedia('(display-mode: standalone)').matches;
+      const portrait = window.innerHeight >= window.innerWidth;
+      const screenHeight = portrait
+        ? Math.max(window.screen.height, window.screen.width)
+        : Math.min(window.screen.height, window.screen.width);
+      const appHeight = standalone ? Math.max(screenHeight, window.innerHeight) : window.innerHeight;
+      document.documentElement.style.setProperty('--app-height', `${appHeight}px`);
       const next = measureCssInsets();
       setInsets((current) =>
         current.top === next.top && current.right === next.right

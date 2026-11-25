@@ -9,6 +9,7 @@ body,
   background-color: #050706;
 }
 
+/* PWA na cały ekran: tło sięga pod godzinę u góry i pod pasek na dole. */
 html,
 body {
   height: 100%;
@@ -28,14 +29,22 @@ body {
     radial-gradient(ellipse at 73% 88%, rgba(181, 240, 102, 0.045), transparent 32rem);
 }
 
-/* #root fills the PWA viewport; WebSafeAreaInsets supplies the safe-area values to screens. */
+/* #root wypełnia cały ekran (bez paddingu). Odstępy od wycięcia i paska na dole liczą ekrany same –
+   WebSafeAreaInsets (src/lib/web-safe-area.tsx) podaje im prawdziwe env(safe-area-inset-*). */
 #root {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  inset: 0;
+  left: 0;
   padding: 0;
   position: fixed;
+  right: 0;
+  top: 0;
+  /* iOS w trybie PWA (black-translucent) liczy 100% bez paska stanu – na dole zostawał czarny pas.
+     --app-height ustawia src/lib/web-safe-area.tsx (pełna wysokość ekranu); 100lvh/100vh to zapas. */
+  height: 100vh;
+  height: 100lvh;
+  height: var(--app-height, 100lvh);
 }
 
 html body .ai-coach-viewport {
