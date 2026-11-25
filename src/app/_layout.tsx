@@ -50,7 +50,13 @@ function AppNavigator() {
         contentStyle: { backgroundColor: '#050706' },
       }}>
       <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(tabs)" />
+      <Stack.Screen
+        name="(tabs)"
+        options={{
+          contentStyle: { backgroundColor: 'transparent' },
+          statusBarTranslucent: true,
+        }}
+      />
       <Stack.Screen name="index" />
       <Stack.Screen name="workout-flow" />
       <Stack.Screen name="create-workout" />

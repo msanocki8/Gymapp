@@ -22,7 +22,7 @@ type IconName = ComponentProps<typeof SymbolView>['name'];
 const blurMethod = Platform.OS === 'android' ? 'dimezisBlurViewSdk31Plus' : undefined;
 const BAR_HEIGHT = 64;
 const FAB_SIZE = 66;
-const WEB_BOTTOM_GAP = 20;
+const WEB_BOTTOM_GAP = 12;
 // The button's centre sits this far below the top edge of the bar, so it rises 21 px above it.
 const FAB_CENTER_BELOW_TOP = 12;
 const FAB_OVERHANG = FAB_SIZE / 2 - FAB_CENTER_BELOW_TOP;
