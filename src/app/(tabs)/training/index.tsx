@@ -1,11 +1,9 @@
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { cssInterop } from 'nativewind';
 import {
   createContext,
   useCallback,
-  useContext,
   useMemo,
   useRef,
   useState,
@@ -15,7 +13,6 @@ import {
   type RefObject,
 } from 'react';
 import {
-  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -32,24 +29,14 @@ import { APP_BOTTOM_BAR_CONTENT_HEIGHT } from '@/components/app-bottom-bar';
 import { AmbientBackground } from '@/components/ambient-background';
 import { AppSidePanel } from '@/components/app-side-panel';
 import { GymFlame, GymLogoTile } from '@/components/gym-flame';
+import { HomeLastWorkout } from '@/components/home-last-workout';
 import { ObsidianCard } from '@/components/obsidian-card';
 import { useGymApp } from '@/hooks/use-gym-app';
-import type { WorkoutPlan } from '@/hooks/use-gym-app';
 import { useAuth } from '@/hooks/use-auth';
 import { countWorkoutsThisWeek } from '@/lib/workout-goal';
 import { FilledPlayIcon } from '@/components/filled-play-icon';
 
 type CrossPlatformShadowStyle = ViewStyle & { boxShadow?: string };
-
-const cardShadow: CrossPlatformShadowStyle = Platform.OS === 'web'
-  ? { boxShadow: '0 10px 28px rgba(0, 0, 0, 0.26)' }
-  : {
-      shadowColor: '#000000',
-      shadowOpacity: 0.18,
-      shadowRadius: 18,
-      shadowOffset: { width: 0, height: 8 },
-      elevation: 4,
-    };
 
 const softStartButtonGlow: CrossPlatformShadowStyle = Platform.OS === 'web'
   ? { boxShadow: '0 0 16px rgba(163, 230, 53, 0.32), 0 8px 22px rgba(163, 230, 53, 0.16)' }
@@ -99,32 +86,13 @@ function HeroGlowCard({ children }: { children: ReactNode }) {
   );
 }
 
-const blurMethod = Platform.OS === 'android' ? 'dimezisBlurViewSdk31Plus' : undefined;
 const LocalBlurTargetContext = createContext<RefObject<ComponentRef<typeof View> | null> | null>(null);
-const cardTopGradient = [
-  glassTokens.gradients.cardTop[0],
-  glassTokens.gradients.cardTop[1],
-  glassTokens.gradients.cardTop[2],
-] as const;
 const startButtonGradient = [
   glassTokens.gradients.startButton[0],
   glassTokens.gradients.startButton[1],
 ] as const;
 
 cssInterop(LinearGradient, { className: 'style' });
-
-const formatDuration = (minutes: number) => `${minutes} min`;
-
-function formatExerciseCount(count: number) {
-  const lastTwoDigits = count % 100;
-  const lastDigit = count % 10;
-  const form = count === 1
-    ? 'ćwiczenie'
-    : lastDigit >= 2 && lastDigit <= 4 && (lastTwoDigits < 12 || lastTwoDigits > 14)
-      ? 'ćwiczenia'
-      : 'ćwiczeń';
-  return `${count} ${form}`;
-}
 
 function AppIcon({
   name,
@@ -136,87 +104,6 @@ function AppIcon({
   color: string;
 }) {
   return <SymbolView name={name} size={size} tintColor={color} />;
-}
-
-function GlassCard({
-  children,
-  className = '',
-  contentClassName = '',
-}: {
-  children: React.ReactNode;
-  className?: string;
-  contentClassName?: string;
-}) {
-  const blurTarget = useContext(LocalBlurTargetContext);
-
-  return (
-    <View
-      className={`relative w-full overflow-hidden rounded-[26px] border border-glass-border bg-glass-fill ${className}`}
-      style={cardShadow}>
-      {Platform.OS !== 'web' ? (
-        <BlurView
-          pointerEvents="none"
-          blurMethod={blurMethod}
-          blurTarget={blurTarget ?? undefined}
-          intensity={18}
-          tint="dark"
-          style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}
-        />
-      ) : null}
-      <LinearGradient
-        pointerEvents="none"
-        colors={cardTopGradient}
-        locations={[0, 0.52, 1]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        className="absolute inset-0"
-        style={{ borderRadius: 26 }}
-      />
-      <View className={`relative z-10 ${contentClassName}`}>{children}</View>
-    </View>
-  );
-}
-
-function WorkoutPlanCard({
-  workout,
-  onPress,
-}: {
-  workout: WorkoutPlan;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Otwórz plan ${workout.name}`}
-      onPress={onPress}
-      className="w-full active:opacity-80">
-      <ObsidianCard contentStyle={styles.planContent}>
-        <View style={styles.planIcon}>
-          <AppIcon
-            name={{ ios: 'dumbbell.fill', android: 'fitness_center', web: 'fitness_center' }}
-            size={19}
-            color="#F0ABFC"
-          />
-        </View>
-        <View className="min-w-0 flex-1 gap-[3px]">
-          <Text numberOfLines={1} className="text-[15px] font-black text-text-primary">
-            {workout.name}
-          </Text>
-          <Text numberOfLines={1} className="text-[12px] text-text-muted">
-            {formatDuration(workout.duration)} · {formatExerciseCount(workout.exercises.length)}
-          </Text>
-          <Text numberOfLines={1} className="text-[12px] text-text-muted">
-            {workout.focus}
-          </Text>
-        </View>
-        <AppIcon
-          name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-          size={14}
-          color="#A3E635"
-        />
-      </ObsidianCard>
-    </Pressable>
-  );
 }
 
 export default function TrainingHomeScreen() {
@@ -406,75 +293,16 @@ export default function TrainingHomeScreen() {
             </View>
           </HeroGlowCard>
 
-          <View className="gap-[13px]">
-            <View className="flex-row items-end justify-between gap-[10px] px-px">
-              <View className="min-w-0 flex-1">
-                <Text className="mb-[5px] text-[10px] font-black tracking-[1.6px] text-neon-lime">
-                  DODANE PLANY
-                </Text>
-                <Text className="text-[22px] font-black leading-[27px] tracking-[-0.4px] text-text-primary">
-                  Twoje poranne treningi
-                </Text>
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push('/workout-flow')}
-                className="flex-row items-center gap-[5px] py-[7px] pl-2 active:opacity-75">
-                <Text className="text-[12px] font-bold text-neon-bright">Wszystkie</Text>
-                <AppIcon
-                  name={{ ios: 'arrow.right', android: 'arrow_forward', web: 'arrow_forward' }}
-                  size={13}
-                  color="#A3E635"
-                />
-              </Pressable>
-            </View>
-
-            {plansLoading ? (
-              <GlassCard contentClassName="min-h-[86px] flex-row items-center justify-center gap-[11px] p-[18px]">
-                <ActivityIndicator color="#A3E635" />
-                <Text className="text-[13px] text-text-primary">Ładowanie Twoich planów…</Text>
-              </GlassCard>
-            ) : plansError ? (
-              <GlassCard contentClassName="gap-3 p-[17px]">
-                <Text className="text-[13px] leading-[19px] text-red-200">{plansError}</Text>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => {
-                    void reloadPlans();
-                    void reloadSessions();
-                  }}
-                  className="self-start rounded-xl bg-red-400/10 px-[11px] py-[7px]">
-                  <Text className="text-[12px] font-bold text-red-300">Spróbuj ponownie</Text>
-                </Pressable>
-              </GlassCard>
-            ) : plans.length > 0 ? (
-              <View className="gap-[10px]">
-                {plans.slice(0, 3).map((workout) => (
-                  <WorkoutPlanCard
-                    key={workout.id}
-                    workout={workout}
-                    onPress={() => router.push({ pathname: '/workout-session', params: { planId: workout.id } })}
-                  />
-                ))}
-              </View>
-            ) : (
-              <GlassCard contentClassName="gap-2 p-[18px]">
-                <Text className="text-[14px] font-extrabold text-text-primary">
-                  Zacznij od własnego planu
-                </Text>
-                <Text className="text-[12px] leading-[18px] text-text-muted">
-                  Dodaj ćwiczenia i zapisz trening na swoim koncie.
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push('/create-workout')}
-                  className="mt-[5px] self-start flex-row items-center gap-2 py-2">
-                  <Text className="text-[12px] font-extrabold text-neon-bright">Utwórz plan</Text>
-                  <AppIcon name={{ ios: 'plus', android: 'add', web: 'add' }} size={14} color="#4ADE80" />
-                </Pressable>
-              </GlassCard>
-            )}
-          </View>
+          <HomeLastWorkout
+            sessions={sessions}
+            loading={sessionsLoading}
+            error={sessionsError}
+            onRetry={() => {
+              void reloadSessions();
+            }}
+            onOpenHistory={() => router.push('/(tabs)/history')}
+            onStart={() => router.push('/workout-flow')}
+          />
         </View>
         </ScrollView>
       </LocalBlurTargetContext.Provider>
@@ -517,22 +345,5 @@ const styles = StyleSheet.create({
   },
   heroContent: {
     padding: 25,
-  },
-  planContent: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-  },
-  planIcon: {
-    alignItems: 'center',
-    backgroundColor: '#0E110F',
-    borderColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 14,
-    borderWidth: 1,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
   },
 });
