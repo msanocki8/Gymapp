@@ -50,14 +50,11 @@ export default function AppTabs() {
           height: 85 + insets.bottom,
           position: 'absolute',
         },
-        sceneStyle: { backgroundColor: '#080B09' },
+        sceneStyle: { backgroundColor: '#0A0D0B' },
       }}>
       <Tabs.Screen
         name="training/index"
-        options={{
-          title: 'Treningi',
-          sceneStyle: { backgroundColor: 'transparent' },
-        }}
+        options={{ title: 'Treningi' }}
       />
       <Tabs.Screen name="history" options={{ title: 'Historia' }} />
       <Tabs.Screen name="account" options={{ title: 'Konto' }} />

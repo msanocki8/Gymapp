@@ -315,7 +315,7 @@ export default function AccountScreen() {
             {signingOut ? <ActivityIndicator color="#FCA5A5" /> : null}
             <Text className="text-sm font-bold text-red-200">{signingOut ? 'Wylogowywanie…' : 'Wyloguj się'}</Text>
           </Pressable>
-          <Text className="mt-10 text-center text-[10px] font-bold tracking-[2px] text-white/25">GYM LOG · 1.0</Text>
+          <Text className="mt-10 text-center text-[10px] font-bold tracking-[2px] text-white/25">GYM LOG · 1.0.1</Text>
         </View>
       </ScrollView>
     </GlassScreen>

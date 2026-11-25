@@ -271,7 +271,7 @@ export default function TrainingHomeScreen() {
   );
 
   return (
-    <View className="flex-1 overflow-hidden bg-ink-950">
+    <View className="flex-1 bg-[#0A0D0B]">
       <AmbientBackground blurTarget={blurTarget} />
       <LocalBlurTargetContext.Provider value={blurTarget}>
         <ScrollView
@@ -280,7 +280,7 @@ export default function TrainingHomeScreen() {
           contentContainerStyle={{
             flexGrow: 1,
             paddingHorizontal: 20,
-            paddingTop: insets.top + 16,
+            paddingTop: insets.top,
             paddingBottom: APP_BOTTOM_BAR_CONTENT_HEIGHT + insets.bottom,
           }}
           showsVerticalScrollIndicator={false}>
