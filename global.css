@@ -9,6 +9,12 @@ body,
   background-color: #050706;
 }
 
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   display: flex;
   flex-direction: column;
@@ -22,14 +28,14 @@ body {
     radial-gradient(ellipse at 73% 88%, rgba(181, 240, 102, 0.045), transparent 32rem);
 }
 
-/* Expo Router's web SafeAreaProvider reports zero insets, so use CSS env values for PWA. */
+/* #root fills the PWA viewport; WebSafeAreaInsets supplies the safe-area values to screens. */
 #root {
   box-sizing: border-box;
   display: flex;
-  flex: 1 0 auto;
   flex-direction: column;
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: 0;
+  inset: 0;
+  padding: 0;
+  position: fixed;
 }
 
 html body .ai-coach-viewport {

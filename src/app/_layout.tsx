@@ -5,9 +5,11 @@ import type { Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, Text, View } from 'react-native';
 
+import { WorkoutDynamicIsland } from '@/components/workout-dynamic-island';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import { GymAppProvider } from '@/hooks/use-gym-app';
 import { getSafeShareReturnTo } from '@/lib/auth-return-to';
+import { WebSafeAreaInsets } from '@/lib/web-safe-area';
 
 function AppNavigator() {
   const { session, isLoading } = useAuth();
@@ -70,12 +72,17 @@ function AppNavigator() {
 export default function RootLayout() {
   return (
     <ThemeProvider value={DarkTheme}>
-      <AuthProvider>
-        <GymAppProvider>
-          <StatusBar style="light" />
-          <AppNavigator />
-        </GymAppProvider>
-      </AuthProvider>
+      <WebSafeAreaInsets>
+        <AuthProvider>
+          <GymAppProvider>
+            <StatusBar style="light" />
+            <View style={{ flex: 1 }}>
+              <AppNavigator />
+              <WorkoutDynamicIsland />
+            </View>
+          </GymAppProvider>
+        </AuthProvider>
+      </WebSafeAreaInsets>
     </ThemeProvider>
   );
 }

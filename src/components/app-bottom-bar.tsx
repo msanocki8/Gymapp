@@ -108,7 +108,9 @@ export function AppBottomBar({
   startActive?: boolean;
   aiActive?: boolean;
 }) {
-  const bottomPadding = Platform.OS === 'web' ? 0 : Math.max(bottomInset, 10);
+  const bottomPadding = Platform.OS === 'web'
+    ? Math.max(bottomInset - WEB_BOTTOM_GAP, 0)
+    : Math.max(bottomInset, 10);
   const reducedMotion = useReducedMotion();
   const morph = startMorph;
 

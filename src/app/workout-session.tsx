@@ -27,6 +27,7 @@ import { MuscleVolumePanel } from '@/components/muscle-volume-panel';
 import { WorkoutHeader, WorkoutScreen, WorkoutButton, workoutColors, workoutStyles } from '@/components/workout-ui';
 import { exerciseLibrary, Exercise } from '@/constants/exercise-library';
 import { WorkoutExerciseConfig, WorkoutPlan, useGymApp } from '@/hooks/use-gym-app';
+import { activeWorkout } from '@/lib/active-workout-store';
 import { AnalysisPeriod, areAllSetsCompleted, calculateMuscleVolume, getLocalWeekKey, VolumeExercise } from '@/lib/muscle-volume';
 
 const DEFAULT_SETS_PER_EXERCISE = 3;
@@ -280,7 +281,9 @@ export default function WorkoutSessionScreen() {
   const { plans, sessions, recordSession } = useGymApp();
   const plan = plans.find((item) => item.id === planId);
   const [draftsByPlan, setDraftsByPlan] = useState<Record<string, SessionDraft>>(() =>
-    isQuickStart ? { [QUICK_START_PLAN.id]: EMPTY_SESSION_DRAFT } : {});
+    isQuickStart
+      ? { [QUICK_START_PLAN.id]: activeWorkout.getDraft<SessionDraft>(QUICK_START_PLAN.id) ?? EMPTY_SESSION_DRAFT }
+      : {});
   const [draftLoadedPlanId, setDraftLoadedPlanId] = useState<string | null>(() =>
     isQuickStart ? QUICK_START_PLAN.id : null);
   const [draftStorageError, setDraftStorageError] = useState<string | null>(null);
@@ -443,7 +446,10 @@ export default function WorkoutSessionScreen() {
       .then((storedDraft) => {
         if (!isActive) return;
         completedDraftPlanIds.current.delete(plan.id);
-        const draft = draftsByPlanRef.current[plan.id] ?? storedDraft ?? createSessionDraft(plan);
+        const draft = draftsByPlanRef.current[plan.id]
+          ?? activeWorkout.getDraft<SessionDraft>(plan.id)
+          ?? storedDraft
+          ?? createSessionDraft(plan);
         setDraftsByPlan((current) => current[plan.id]
           ? current
           : { ...current, [plan.id]: draft });
@@ -533,6 +539,7 @@ export default function WorkoutSessionScreen() {
     const leaveWorkout = async () => {
       if (!await discardActiveWorkoutDraft()) return;
       clearWorkoutTimerStorage(workoutStartKey, restDeadlineKey);
+      activeWorkout.end(activePlan.id);
       allowExitRef.current = true;
       setAllowExit(true);
       repeat();
@@ -543,8 +550,22 @@ export default function WorkoutSessionScreen() {
   useEffect(() => {
     const now = Date.now();
     const storedStart = readStoredTimestamp(workoutStartKey);
-    startedAt.current = storedStart ?? now;
-    if (storedStart === null) writeStoredTimestamp(workoutStartKey, now);
+    const backgroundState = activeWorkout.getState();
+    const backgroundStart = backgroundState.isActive
+      && backgroundState.planId === (plan?.id ?? null)
+      && backgroundState.isQuickStart === isQuickStart
+      ? backgroundState.startTime
+      : null;
+    startedAt.current = storedStart ?? backgroundStart ?? now;
+    if (storedStart === null) writeStoredTimestamp(workoutStartKey, startedAt.current);
+    if (workoutStartKey) {
+      activeWorkout.open({
+        planId: plan?.id ?? null,
+        isQuickStart,
+        planName: activePlan.name,
+        startTime: startedAt.current,
+      });
+    }
 
     const storedRestDeadline = readStoredTimestamp(restDeadlineKey);
     restDeadline.current = storedRestDeadline !== null && storedRestDeadline > now
@@ -603,6 +624,12 @@ export default function WorkoutSessionScreen() {
     return statuses.some((status) => status === 'completed') ? 'partial' : 'todo';
   });
   const showMiniRestTimer = scrollOffset >= restCardBottom;
+  const currentDraft = draftsByPlan[activePlan.id];
+  useEffect(() => {
+    if (!currentDraft) return;
+    activeWorkout.saveDraft(activePlan.id, currentDraft);
+    activeWorkout.setProgress(completedExercises, exerciseConfigs.length);
+  }, [currentDraft, activePlan.id, completedExercises, exerciseConfigs.length]);
   const previousPerformanceByExercise = useMemo(() => {
     const byId = new Map<string, WorkoutExerciseConfig['sets']>();
     const byName = new Map<string, { exerciseId?: string; sets: WorkoutExerciseConfig['sets'] }>();
@@ -957,6 +984,7 @@ export default function WorkoutSessionScreen() {
       });
       setDraftLoadedPlanId(null);
       clearWorkoutTimerStorage(workoutStartKey, restDeadlineKey);
+      activeWorkout.end(activePlan.id);
       allowExitRef.current = true;
       setAllowExit(true);
       disableWorkoutRemovalPrevention();
@@ -983,6 +1011,7 @@ export default function WorkoutSessionScreen() {
     confirmWorkoutExit(async () => {
       if (!await discardActiveWorkoutDraft()) return;
       clearWorkoutTimerStorage(workoutStartKey, restDeadlineKey);
+      activeWorkout.end(activePlan.id);
       allowExitRef.current = true;
       setAllowExit(true);
       disableWorkoutRemovalPrevention();
@@ -992,6 +1021,18 @@ export default function WorkoutSessionScreen() {
         router.replace('/workout-flow');
       }
     });
+  }
+
+  function minimizeWorkout() {
+    if (savingRef.current) return;
+    activeWorkout.saveDraft(activePlan.id, draft);
+    activeWorkout.minimize();
+    disableWorkoutRemovalPrevention();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/training');
+    }
   }
 
   if (isExercisePickerVisible) {
@@ -1020,14 +1061,26 @@ export default function WorkoutSessionScreen() {
     <View className="min-w-0 flex-row items-center gap-3 px-5" style={styles.sessionHeader}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Wróć"
+        accessibilityLabel="Zminimalizuj trening – będzie trwał w tle"
+        onPress={minimizeWorkout}
+        className="items-center justify-center rounded-full border border-lime-400/40 bg-black/35 active:opacity-75"
+        style={styles.sessionBackButton}>
+        <SymbolView
+          name={{ ios: 'chevron.down', android: 'keyboard_arrow_down', web: 'keyboard_arrow_down' }}
+          size={18}
+          tintColor="#A3E635"
+        />
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Przerwij trening i usuń postęp"
         onPress={requestWorkoutExit}
         className="items-center justify-center rounded-full border border-white/15 bg-black/35 active:opacity-75"
         style={styles.sessionBackButton}>
         <SymbolView
-          name={{ ios: 'arrow.left', android: 'arrow_back', web: 'arrow_back' }}
-          size={17}
-          tintColor="#A3E635"
+          name={{ ios: 'xmark', android: 'close', web: 'close' }}
+          size={14}
+          tintColor="#9AA69F"
         />
       </Pressable>
       <View className="min-w-0 flex-1">
