@@ -22,10 +22,12 @@ type IconName = ComponentProps<typeof SymbolView>['name'];
 const blurMethod = Platform.OS === 'android' ? 'dimezisBlurViewSdk31Plus' : undefined;
 const BAR_HEIGHT = 64;
 const FAB_SIZE = 66;
+const WEB_BOTTOM_GAP = 20;
 // The button's centre sits this far below the top edge of the bar, so it rises 21 px above it.
 const FAB_CENTER_BELOW_TOP = 12;
 const FAB_OVERHANG = FAB_SIZE / 2 - FAB_CENTER_BELOW_TOP;
-export const APP_BOTTOM_BAR_CONTENT_HEIGHT = BAR_HEIGHT + FAB_OVERHANG;
+export const APP_BOTTOM_BAR_CONTENT_HEIGHT =
+  BAR_HEIGHT + FAB_OVERHANG + (Platform.OS === 'web' ? WEB_BOTTOM_GAP : 0);
 const MORPH_MS = 600;
 const morphEasing = Easing.bezier(0.65, 0, 0.35, 1);
 const startMorph = makeMutable(0);
@@ -168,7 +170,7 @@ export function AppBottomBar({
 const styles = StyleSheet.create({
   bar: {
     alignItems: 'center',
-    bottom: 0,
+    bottom: Platform.OS === 'web' ? WEB_BOTTOM_GAP : 0,
     left: 0,
     position: 'absolute',
     right: 0,

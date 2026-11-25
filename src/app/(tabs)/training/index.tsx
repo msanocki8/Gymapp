@@ -25,7 +25,7 @@ import {
 } from 'react-native';
 import type { ScrollViewInstance, ViewStyle } from 'react-native';
 import { SymbolView } from 'expo-symbols';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import glassTokens from '@/constants/glass-tokens.json';
 import { APP_BOTTOM_BAR_CONTENT_HEIGHT } from '@/components/app-bottom-bar';
@@ -271,7 +271,7 @@ export default function TrainingHomeScreen() {
   );
 
   return (
-    <SafeAreaView edges={['top']} className="flex-1 overflow-hidden bg-ink-950">
+    <View className="flex-1 overflow-hidden bg-ink-950">
       <AmbientBackground blurTarget={blurTarget} />
       <LocalBlurTargetContext.Provider value={blurTarget}>
         <ScrollView
@@ -280,7 +280,7 @@ export default function TrainingHomeScreen() {
           contentContainerStyle={{
             flexGrow: 1,
             paddingHorizontal: 20,
-            paddingTop: 16,
+            paddingTop: insets.top + 16,
             paddingBottom: APP_BOTTOM_BAR_CONTENT_HEIGHT + insets.bottom,
           }}
           showsVerticalScrollIndicator={false}>
@@ -488,7 +488,7 @@ export default function TrainingHomeScreen() {
         plansLoading={plansLoading}
         plansError={plansError}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
