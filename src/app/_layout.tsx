@@ -2,14 +2,31 @@ import '../../global.css';
 
 import { DarkTheme, Redirect, Stack, ThemeProvider, useGlobalSearchParams, useSegments } from 'expo-router';
 import type { Href } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, Text, View } from 'react-native';
 
+import { LaunchScreen } from '@/components/launch-screen';
 import { WorkoutDynamicIsland } from '@/components/workout-dynamic-island';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import { GymAppProvider } from '@/hooks/use-gym-app';
 import { getSafeShareReturnTo } from '@/lib/auth-return-to';
 import { WebSafeAreaInsets } from '@/lib/web-safe-area';
+
+void SplashScreen.preventAutoHideAsync().catch((error: unknown) => {
+  console.error('Nie udało się zatrzymać natywnego ekranu startowego.', error);
+});
+
+function hideNativeSplash() {
+  void SplashScreen.hideAsync().catch((error: unknown) => {
+    console.error('Nie udało się ukryć natywnego ekranu startowego.', error);
+  });
+}
+
+function LaunchGate() {
+  const { isLoading } = useAuth();
+  return <LaunchScreen ready={!isLoading} onShown={hideNativeSplash} />;
+}
 
 function AppNavigator() {
   const { session, isLoading } = useAuth();
@@ -79,6 +96,7 @@ export default function RootLayout() {
             <View style={{ flex: 1 }}>
               <AppNavigator />
               <WorkoutDynamicIsland />
+              <LaunchGate />
             </View>
           </GymAppProvider>
         </AuthProvider>
