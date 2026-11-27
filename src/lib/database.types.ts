@@ -139,6 +139,130 @@ export type Database = {
         };
         Relationships: [];
       };
+      diet_profiles: {
+        Row: {
+          user_id: string;
+          sex: 'male' | 'female';
+          age: number;
+          height_cm: number;
+          weight_kg: number;
+          activity: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
+          goal: 'cut' | 'maintain' | 'bulk';
+          kcal_target: number | null;
+          protein_target: number | null;
+          carbs_target: number | null;
+          fat_target: number | null;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          sex: 'male' | 'female';
+          age: number;
+          height_cm: number;
+          weight_kg: number;
+          activity: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
+          goal: 'cut' | 'maintain' | 'bulk';
+          kcal_target?: number | null;
+          protein_target?: number | null;
+          carbs_target?: number | null;
+          fat_target?: number | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['diet_profiles']['Insert']>;
+        Relationships: [];
+      };
+      custom_foods: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          brand: string | null;
+          barcode: string | null;
+          kcal_100: number;
+          protein_100: number;
+          carbs_100: number;
+          fat_100: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          brand?: string | null;
+          barcode?: string | null;
+          kcal_100: number;
+          protein_100?: number;
+          carbs_100?: number;
+          fat_100?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['custom_foods']['Insert']>;
+        Relationships: [];
+      };
+      food_cache: {
+        Row: {
+          barcode: string;
+          name: string;
+          brand: string | null;
+          kcal_100: number;
+          protein_100: number;
+          carbs_100: number;
+          fat_100: number;
+          image_url: string | null;
+          source: 'off';
+          fetched_at: string;
+        };
+        Insert: {
+          barcode: string;
+          name: string;
+          brand?: string | null;
+          kcal_100: number;
+          protein_100?: number;
+          carbs_100?: number;
+          fat_100?: number;
+          image_url?: string | null;
+          source?: 'off';
+          fetched_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['food_cache']['Insert']>;
+        Relationships: [];
+      };
+      diet_entries: {
+        Row: {
+          id: string;
+          user_id: string;
+          eaten_on: string;
+          meal: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+          food_name: string;
+          brand: string | null;
+          source: 'off' | 'custom';
+          source_id: string | null;
+          grams: number;
+          kcal: number;
+          protein: number;
+          carbs: number;
+          fat: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          eaten_on: string;
+          meal: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+          food_name: string;
+          brand?: string | null;
+          source: 'off' | 'custom';
+          source_id?: string | null;
+          grams: number;
+          kcal: number;
+          protein?: number;
+          carbs?: number;
+          fat?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['diet_entries']['Insert']>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

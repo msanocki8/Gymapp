@@ -13,31 +13,33 @@ export default function AppTabs() {
         const activeRoute = props.state.routes[props.state.index];
         const segment = segments.find(
           (name): name is AppTabName =>
-            name === 'training' || name === 'history' || name === 'account',
+            name === 'training' || name === 'history' || name === 'diet' || name === 'account',
         );
         const activeTab: AppTabName =
           segment ?? (activeRoute.name === 'training/index' ? 'training' : (activeRoute.name as AppTabName));
+
+        const navigate = (tab: AppTabName) => {
+          const routeName = tab === 'training' ? 'training/index' : tab;
+          const route = props.state.routes.find((item) => item.name === routeName);
+          if (!route) return;
+
+          const event = props.emitter.emit({
+            type: 'tabPress',
+            target: route.key,
+            canPreventDefault: true,
+          });
+          if (!event.defaultPrevented && route.key !== activeRoute.key) {
+            router.navigate(`/(tabs)/${tab}`);
+          }
+        };
 
         return (
           <AppBottomBar
             activeTab={activeTab}
             bottomInset={props.insets.bottom}
-            onNavigate={(tab) => {
-              const routeName = tab === 'training' ? 'training/index' : tab;
-              const route = props.state.routes.find((item) => item.name === routeName);
-              if (!route) return;
-
-              const event = props.emitter.emit({
-                type: 'tabPress',
-                target: route.key,
-                canPreventDefault: true,
-              });
-              if (!event.defaultPrevented && route.key !== activeRoute.key) {
-                router.navigate(`/(tabs)/${tab}`);
-              }
-            }}
+            onNavigate={navigate}
             onStart={() => router.push('/workout-flow')}
-            onAiCoach={() => router.push('/ai-coach')}
+            onDiet={() => navigate('diet')}
           />
         );
       }}
@@ -57,6 +59,7 @@ export default function AppTabs() {
         options={{ title: 'Treningi' }}
       />
       <Tabs.Screen name="history" options={{ title: 'Historia' }} />
+      <Tabs.Screen name="diet" options={{ title: 'Dieta' }} />
       <Tabs.Screen name="account" options={{ title: 'Konto' }} />
     </Tabs>
   );

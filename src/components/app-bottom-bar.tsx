@@ -1,10 +1,11 @@
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import type { ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView } from 'expo-symbols';
 import { useEffect } from 'react';
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import Animated, {
   Easing,
   makeMutable,
@@ -14,7 +15,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 
-export type AppTabName = 'training' | 'history' | 'account';
+import { AppleOutlineIcon } from '@/components/diet/apple-icon';
+
+export type AppTabName = 'training' | 'history' | 'diet' | 'account';
 
 type CrossPlatformShadow = ViewStyle & { boxShadow?: string };
 type IconName = ComponentProps<typeof SymbolView>['name'];
@@ -32,10 +35,9 @@ const MORPH_MS = 600;
 const morphEasing = Easing.bezier(0.65, 0, 0.35, 1);
 const startMorph = makeMutable(0);
 
-const icons: Record<AppTabName | 'ai', IconName> = {
+const icons: Record<'training' | 'history' | 'account', IconName> = {
   training: { ios: 'house', android: 'home', web: 'home' },
   history: { ios: 'chart.bar', android: 'bar_chart', web: 'bar_chart' },
-  ai: { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' },
   account: { ios: 'person', android: 'person', web: 'person' },
 };
 
@@ -73,7 +75,7 @@ function TabButton({
   onPress,
 }: {
   label: string;
-  icon: IconName;
+  icon: IconName | ((color: string) => ReactNode);
   active: boolean;
   onPress: () => void;
 }) {
@@ -85,7 +87,7 @@ function TabButton({
       accessibilityState={{ selected: active }}
       onPress={onPress}
       style={({ pressed }) => [styles.tab, pressed && styles.pressed]}>
-      <SymbolView name={icon} size={22} tintColor={color} />
+      {typeof icon === 'function' ? icon(color) : <SymbolView name={icon} size={22} tintColor={color} />}
       <View style={[styles.indicator, active && styles.indicatorActive]} />
     </Pressable>
   );
@@ -96,21 +98,22 @@ export function AppBottomBar({
   bottomInset,
   onNavigate,
   onStart,
-  onAiCoach,
+  onDiet,
   startActive = false,
-  aiActive = false,
 }: {
   activeTab: AppTabName | null;
   bottomInset: number;
   onNavigate: (tab: AppTabName) => void;
   onStart: () => void;
-  onAiCoach: () => void;
+  /** Bez tego zakładka Dieta po prostu przechodzi do /(tabs)/diet. */
+  onDiet?: () => void;
+  /** Zostawione dla zgodności – AI Coach jest teraz w menu bocznym, nie na pasku. */
+  onAiCoach?: () => void;
   startActive?: boolean;
   aiActive?: boolean;
 }) {
-  const bottomPadding = Platform.OS === 'web'
-    ? Math.max(bottomInset - WEB_BOTTOM_GAP, 0)
-    : Math.max(bottomInset, 10);
+  // Web: pasek stoi WEB_BOTTOM_GAP nad dołem, a na iPhonie z kreską – nad nią (bottomInset z env()).
+  const bottomPadding = Platform.OS === 'web' ? Math.max(bottomInset - WEB_BOTTOM_GAP, 0) : Math.max(bottomInset, 10);
   const reducedMotion = useReducedMotion();
   const morph = startMorph;
 
@@ -142,7 +145,12 @@ export function AppBottomBar({
           <TabButton label="Treningi" icon={icons.training} active={activeTab === 'training'} onPress={() => onNavigate('training')} />
           <TabButton label="Historia" icon={icons.history} active={activeTab === 'history'} onPress={() => onNavigate('history')} />
           <View style={styles.fabSlot} />
-          <TabButton label="AI Coach" icon={icons.ai} active={aiActive} onPress={onAiCoach} />
+          <TabButton
+            label="Dieta"
+            icon={(color) => <AppleOutlineIcon color={color} />}
+            active={activeTab === 'diet'}
+            onPress={onDiet ?? (() => router.navigate('/(tabs)/diet'))}
+          />
           <TabButton label="Konto" icon={icons.account} active={activeTab === 'account'} onPress={() => onNavigate('account')} />
         </View>
         <Pressable

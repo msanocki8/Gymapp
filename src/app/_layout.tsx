@@ -82,6 +82,8 @@ function AppNavigator() {
       <Stack.Screen name="workout-session" />
       <Stack.Screen name="ai-coach" />
       <Stack.Screen name="share/[token]" />
+      <Stack.Screen name="diet-add" />
+      <Stack.Screen name="diet-profile" />
     </Stack>
   );
 }
