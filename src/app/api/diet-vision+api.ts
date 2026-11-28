@@ -2,6 +2,7 @@ import { parseDietVisionItems } from '@/lib/diet-vision';
 
 const maxRequestBytes = 3_500_000;
 const maxImageLength = 3_400_000;
+const geminiTimeoutMs = 50_000;
 
 function jsonResponse(body: Record<string, unknown>, status: number) {
   return Response.json(body, {
@@ -68,12 +69,16 @@ export async function POST(request: Request) {
 
   const prompt = `Rozpoznaj widoczne na zdjęciu składniki jedzenia i oszacuj ich porcje. Odpowiedz wyłącznie poprawnym JSON-em zgodnym ze schematem. Wszystkie nazwy podaj po polsku. Dla każdego składnika podaj gramaturę porcji oraz kalorie, białko, węglowodany i tłuszcz dla tej porcji. Nie dodawaj sztućców, naczyń ani niepewnych składników. Jeśli nie widać jedzenia, zwróć {"items":[]}.`;
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), geminiTimeoutMs);
+  let response: Response;
   try {
-    const response = await fetch(
+    response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           contents: [{
             parts: [
@@ -110,42 +115,58 @@ export async function POST(request: Request) {
         }),
       },
     );
-
-    if (!response.ok) {
-      if (response.status === 429) {
-        return jsonResponse({ error: 'Limit zapytań Gemini został osiągnięty. Spróbuj ponownie później.' }, 429);
-      }
-      if ([400, 401, 403].includes(response.status)) {
-        return jsonResponse({ error: 'Klucz API Gemini jest nieprawidłowy lub nie ma uprawnień do tego modelu.' }, 502);
-      }
-      return jsonResponse({ error: 'Usługa Gemini jest chwilowo niedostępna. Spróbuj ponownie później.' }, 502);
-    }
-
-    const result: unknown = await response.json();
-    if (!isRecord(result) || !Array.isArray(result.candidates)) {
-      return jsonResponse({ error: 'Usługa Gemini zwróciła nieprawidłową odpowiedź.' }, 502);
-    }
-    const candidate = result.candidates[0];
-    if (!isRecord(candidate) || !isRecord(candidate.content) || !Array.isArray(candidate.content.parts)) {
-      return jsonResponse({ error: 'Gemini nie rozpoznał składników na zdjęciu.' }, 502);
-    }
-    const text = candidate.content.parts
-      .filter((part): part is Record<string, unknown> => isRecord(part) && typeof part.text === 'string')
-      .map((part) => part.text)
-      .join('')
-      .trim();
-    if (!text) return jsonResponse({ error: 'Gemini zwrócił pustą odpowiedź. Spróbuj ponownie.' }, 502);
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      return jsonResponse({ error: 'Gemini zwrócił nieprawidłowy format danych.' }, 502);
-    }
-    const items = parseDietVisionItems(parsed);
-    if (!items) return jsonResponse({ error: 'Gemini zwrócił nieprawidłowe dane składników.' }, 502);
-    return jsonResponse({ items }, 200);
   } catch {
-    return jsonResponse({ error: 'Nie udało się połączyć z usługą Gemini. Spróbuj ponownie.' }, 502);
+    if (controller.signal.aborted) {
+      return jsonResponse({ error: 'Analiza zdjęcia przekroczyła limit czasu. Spróbuj ponownie.' }, 504);
+    }
+    return jsonResponse({ error: 'Nie udało się połączyć z Gemini. Sprawdź połączenie i spróbuj ponownie.' }, 502);
+  } finally {
+    clearTimeout(timer);
   }
+
+  if (!response.ok) {
+    if (response.status === 429) {
+      return jsonResponse({ error: 'Limit zapytań Gemini został osiągnięty. Spróbuj ponownie później.' }, 429);
+    }
+    if ([401, 403].includes(response.status)) {
+      return jsonResponse({ error: 'Klucz Gemini jest nieprawidłowy lub nie ma uprawnień do tego modelu.' }, 502);
+    }
+    if (response.status === 400) {
+      return jsonResponse({ error: 'Gemini odrzucił żądanie analizy zdjęcia (HTTP 400).' }, 502);
+    }
+    if (response.status === 404) {
+      return jsonResponse({ error: 'Model Gemini 2.5 Flash nie jest dostępny dla tego klucza API.' }, 502);
+    }
+    return jsonResponse({ error: `Gemini chwilowo nie odpowiada (HTTP ${response.status}). Spróbuj ponownie.` }, 502);
+  }
+
+  let result: unknown;
+  try {
+    result = await response.json();
+  } catch {
+    return jsonResponse({ error: 'Gemini zwrócił odpowiedź w nieprawidłowym formacie.' }, 502);
+  }
+  if (!isRecord(result) || !Array.isArray(result.candidates)) {
+    return jsonResponse({ error: 'Usługa Gemini zwróciła nieprawidłową odpowiedź.' }, 502);
+  }
+  const candidate = result.candidates[0];
+  if (!isRecord(candidate) || !isRecord(candidate.content) || !Array.isArray(candidate.content.parts)) {
+    return jsonResponse({ error: 'Gemini nie rozpoznał składników na zdjęciu.' }, 502);
+  }
+  const text = candidate.content.parts
+    .filter((part): part is Record<string, unknown> => isRecord(part) && typeof part.text === 'string')
+    .map((part) => part.text)
+    .join('')
+    .trim();
+  if (!text) return jsonResponse({ error: 'Gemini zwrócił pustą odpowiedź. Spróbuj ponownie.' }, 502);
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return jsonResponse({ error: 'Gemini zwrócił nieprawidłowy format danych.' }, 502);
+  }
+  const items = parseDietVisionItems(parsed);
+  if (!items) return jsonResponse({ error: 'Gemini zwrócił nieprawidłowe dane składników.' }, 502);
+  return jsonResponse({ items }, 200);
 }
