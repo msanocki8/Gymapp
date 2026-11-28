@@ -2,6 +2,7 @@ import { parseDietVisionItems } from '@/lib/diet-vision';
 
 const maxRequestBytes = 3_500_000;
 const maxImageLength = 3_400_000;
+const maxDescriptionLength = 500;
 const geminiTimeoutMs = 50_000;
 
 function jsonResponse(body: Record<string, unknown>, status: number) {
@@ -58,16 +59,19 @@ export async function POST(request: Request) {
     || body.image.length > maxImageLength
     || !/^[A-Za-z0-9+/]+={0,2}$/.test(body.image)
     || !['image/jpeg', 'image/png', 'image/webp'].includes(String(body.mimeType))
+    || (body.description !== undefined
+      && (typeof body.description !== 'string' || body.description.length > maxDescriptionLength))
   ) {
     return jsonResponse({ error: 'Nieprawidłowe lub zbyt duże zdjęcie.' }, 400);
   }
 
+  const description = typeof body.description === 'string' ? body.description.trim() : '';
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
     return jsonResponse({ error: 'Analiza zdjęć nie jest skonfigurowana na serwerze. Brakuje klucza API Gemini.' }, 503);
   }
 
-  const prompt = `Rozpoznaj widoczne na zdjęciu składniki jedzenia i oszacuj ich porcje. Odpowiedz wyłącznie poprawnym JSON-em zgodnym ze schematem. Wszystkie nazwy podaj po polsku. Dla każdego składnika podaj gramaturę porcji oraz kalorie, białko, węglowodany i tłuszcz dla tej porcji. Nie dodawaj sztućców, naczyń ani niepewnych składników. Jeśli nie widać jedzenia, zwróć {"items":[]}.`;
+  const prompt = `Rozpoznaj widoczne na zdjęciu składniki jedzenia i oszacuj ich porcje. Odpowiedz wyłącznie poprawnym JSON-em zgodnym ze schematem. Wszystkie nazwy podaj po polsku. Dla każdego składnika podaj gramaturę porcji oraz kalorie, białko, węglowodany i tłuszcz dla tej porcji. Jeśli użytkownik doprecyzował markę lub nazwę dania, uwzględnij tę informację i użyj wiarygodnych znanych wartości odżywczych, jeśli je znasz; nie przedstawiaj niepewnych danych jako dokładnych. Nie dodawaj sztućców, naczyń ani niepewnych składników. Jeśli nie widać jedzenia, zwróć {"items":[]}.`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), geminiTimeoutMs);
@@ -83,6 +87,7 @@ export async function POST(request: Request) {
           contents: [{
             parts: [
               { text: prompt },
+              ...(description ? [{ text: `Doprecyzowanie dania przez użytkownika: ${description}` }] : []),
               { inline_data: { mime_type: body.mimeType, data: body.image } },
             ],
           }],

@@ -27,8 +27,6 @@ export function MealSection({
   total,
   entries,
   onAdd,
-  onScanBarcode,
-  onScanPhoto,
   onRemove,
 }: {
   meal: MealKey;
@@ -36,8 +34,6 @@ export function MealSection({
   total: Macros;
   entries: DietEntry[];
   onAdd: () => void;
-  onScanBarcode: () => void;
-  onScanPhoto: () => void;
   onRemove: (entry: DietEntry) => void;
 }) {
   return (
@@ -55,28 +51,7 @@ export function MealSection({
         <View style={styles.actions}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Skanuj kod produktu do: ${label}`}
-            hitSlop={6}
-            onPress={onScanBarcode}
-            style={({ pressed }) => [styles.scanButton, pressed && styles.pressed]}>
-            <Svg width={17} height={17} viewBox="0 0 24 24" fill="none">
-              <Path d="M4 5v14M7 5v14M10 5v14M14 5v14M17 5v14M20 5v14" stroke="#D8E2DA" strokeWidth={1.5} />
-            </Svg>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Zrób zdjęcie posiłku do: ${label}`}
-            hitSlop={6}
-            onPress={onScanPhoto}
-            style={({ pressed }) => [styles.scanButton, pressed && styles.pressed]}>
-            <Svg width={17} height={17} viewBox="0 0 24 24" fill="none">
-              <Path d="M4 8.5h3l1.5-2h7l1.5 2h3v10H4v-10Z" stroke="#D8E2DA" strokeWidth={1.6} strokeLinejoin="round" />
-              <Path d="M12 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="#D8E2DA" strokeWidth={1.6} />
-            </Svg>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Dodaj produkt do: ${label}`}
+            accessibilityLabel={`Dodaj coś do: ${label}`}
             hitSlop={6}
             onPress={onAdd}
             style={({ pressed }) => [addGlow, styles.addWrap, pressed && styles.pressed]}>
@@ -90,9 +65,9 @@ export function MealSection({
       </View>
 
       {entries.length === 0 ? (
-        <Pressable accessibilityRole="button" onPress={onAdd} style={({ pressed }) => [styles.empty, pressed && styles.pressed]}>
-          <Text style={styles.emptyText}>+ Dodaj produkt</Text>
-        </Pressable>
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>Brak produktów. Dodaj je przyciskiem +.</Text>
+        </View>
       ) : (
         entries.map((entry) => (
           <Pressable
@@ -133,28 +108,14 @@ const styles = StyleSheet.create({
   title: { color: '#F5F7F2', fontSize: 15, fontWeight: '900' },
   subtitle: { color: '#7F8983', fontSize: 12 },
   actions: { alignItems: 'center', columnGap: 6, flexDirection: 'row' },
-  scanButton: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 18,
-    borderWidth: 1,
-    height: 36,
-    justifyContent: 'center',
-    width: 36,
-  },
   addWrap: { borderRadius: 18 },
   add: { alignItems: 'center', borderRadius: 18, height: 36, justifyContent: 'center', width: 36 },
   empty: {
-    alignItems: 'center',
-    borderColor: 'rgba(163,230,53,0.3)',
-    borderRadius: 14,
-    borderStyle: 'dashed',
-    borderWidth: 1.5,
     marginTop: 10,
-    padding: 10,
+    paddingHorizontal: 2,
+    paddingVertical: 6,
   },
-  emptyText: { color: '#8A948C', fontSize: 12 },
+  emptyText: { color: '#68736B', fontSize: 11.5, textAlign: 'center' },
   item: {
     alignItems: 'center',
     borderTopColor: 'rgba(255,255,255,0.06)',

@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState, type ComponentRef } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 
@@ -44,12 +44,48 @@ function Chevron({ direction }: { direction: 'left' | 'right' }) {
   );
 }
 
+type AddAction = 'search' | 'barcode' | 'vision' | 'vision-detailed';
+
+const ADD_OPTIONS: { mode: AddAction; title: string; detail: string; icon: 'manual' | 'barcode' | 'camera' | 'ai' }[] = [
+  { mode: 'search', title: 'Dodaj swój produkt', detail: 'Wyszukaj produkt lub wpisz własne wartości.', icon: 'manual' },
+  { mode: 'barcode', title: 'Zeskanuj kod QR', detail: 'Odczytaj kod QR lub kreskowy produktu.', icon: 'barcode' },
+  { mode: 'vision', title: 'Zrób zdjęcie', detail: 'Rozpoznaj składniki i oszacuj wartości odżywcze.', icon: 'camera' },
+  { mode: 'vision-detailed', title: 'Dokładny pomiar z agentem AI', detail: 'Dodaj zdjęcie i opisz danie dokładniej.', icon: 'ai' },
+];
+
+function AddOptionIcon({ icon }: { icon: (typeof ADD_OPTIONS)[number]['icon'] }) {
+  const stroke = '#A3E635';
+  return (
+    <Svg width={21} height={21} viewBox="0 0 24 24" fill="none">
+      {icon === 'manual' ? (
+        <Path d="M12 5v14M5 12h14" stroke={stroke} strokeWidth={2} strokeLinecap="round" />
+      ) : null}
+      {icon === 'barcode' ? (
+        <Path d="M4 5v14M7 5v14M10 5v14M14 5v14M17 5v14M20 5v14" stroke={stroke} strokeWidth={1.6} />
+      ) : null}
+      {icon === 'camera' ? (
+        <>
+          <Path d="M4 8.5h3l1.5-2h7l1.5 2h3v10H4v-10Z" stroke={stroke} strokeWidth={1.7} strokeLinejoin="round" />
+          <Circle cx={12} cy={13} r={3} stroke={stroke} strokeWidth={1.7} />
+        </>
+      ) : null}
+      {icon === 'ai' ? (
+        <>
+          <Path d="M12 3 13.7 9.3 20 11l-6.3 1.7L12 19l-1.7-6.3L4 11l6.3-1.7L12 3Z" stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" />
+          <Path d="m19 16 .8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z" fill={stroke} />
+        </>
+      ) : null}
+    </Svg>
+  );
+}
+
 export default function DietScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const blurTarget = useRef<ComponentRef<typeof View>>(null);
   const todayKey = toLocalDateKey(new Date());
   const [dateKey, setDateKey] = useState(todayKey);
+  const [menuMeal, setMenuMeal] = useState<MealKey | null>(null);
   const day = useDietDay(dateKey);
   const { reload } = day;
 
@@ -58,9 +94,13 @@ export default function DietScreen() {
     void reload();
   }, [reload]));
 
-  const openAdd = (meal: MealKey) => router.push({ pathname: '/diet-add', params: { meal, date: dateKey } });
-  const openBarcode = (meal: MealKey) => router.push({ pathname: '/diet-add', params: { meal, date: dateKey, mode: 'barcode' } });
-  const openPhoto = (meal: MealKey) => router.push({ pathname: '/diet-add', params: { meal, date: dateKey, mode: 'vision' } });
+  const openAddAction = (mode: AddAction) => {
+    if (!menuMeal) return;
+    const meal = menuMeal;
+    setMenuMeal(null);
+    router.push({ pathname: '/diet-add', params: { meal, date: dateKey, mode } });
+  };
+  const menuMealLabel = MEALS.find((meal) => meal.key === menuMeal)?.label ?? '';
 
   return (
     <SafeAreaView edges={['top']} style={styles.screen}>
@@ -129,15 +169,51 @@ export default function DietScreen() {
               label={meal.label}
               total={day.byMeal[meal.key] ?? ZERO}
               entries={day.entries.filter((entry) => entry.meal === meal.key)}
-              onAdd={() => openAdd(meal.key)}
-              onScanBarcode={() => openBarcode(meal.key)}
-              onScanPhoto={() => openPhoto(meal.key)}
+              onAdd={() => setMenuMeal(meal.key)}
               onRemove={(entry) => confirmRemove(entry, () => void day.remove(entry.id))}
             />
           ))}
           {day.entries.length ? <Text style={styles.hint}>Przytrzymaj produkt, aby go usunąć.</Text> : null}
         </View>
       </ScrollView>
+      <Modal
+        visible={menuMeal !== null}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setMenuMeal(null)}>
+        <View style={styles.sheetOverlay}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Zamknij menu dodawania"
+            onPress={() => setMenuMeal(null)}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={[styles.addSheet, { paddingBottom: Math.max(insets.bottom, 18) }]}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Dodaj do: {menuMealLabel}</Text>
+            <Text style={styles.sheetSubtitle}>Wybierz sposób dodania posiłku</Text>
+            <View style={styles.optionList}>
+              {ADD_OPTIONS.map((option) => (
+                <Pressable
+                  key={option.mode}
+                  accessibilityRole="button"
+                  onPress={() => openAddAction(option.mode)}
+                  style={({ pressed }) => [styles.addOption, pressed && styles.pressed]}>
+                  <View style={styles.optionIcon}>
+                    <AddOptionIcon icon={option.icon} />
+                  </View>
+                  <View style={styles.optionText}>
+                    <Text style={styles.optionTitle}>{option.title}</Text>
+                    <Text style={styles.optionDetail}>{option.detail}</Text>
+                  </View>
+                  <Chevron direction="right" />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -200,5 +276,58 @@ const styles = StyleSheet.create({
   sectionEyebrow: { color: '#A3E635', fontSize: 10, fontWeight: '900', letterSpacing: 1.6 },
   sectionTitle: { color: '#F5F7F2', fontSize: 20, fontWeight: '900' },
   hint: { color: '#5F6962', fontSize: 11.5, textAlign: 'center' },
+  sheetOverlay: {
+    backgroundColor: 'rgba(0,0,0,0.68)',
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  addSheet: {
+    alignSelf: 'center',
+    backgroundColor: '#0E1310',
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: 1,
+    maxWidth: 560,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    width: '100%',
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    backgroundColor: 'rgba(255,255,255,0.24)',
+    borderRadius: 2,
+    height: 4,
+    marginBottom: 18,
+    width: 38,
+  },
+  sheetTitle: { color: '#F5F7F2', fontSize: 18, fontWeight: '900' },
+  sheetSubtitle: { color: '#7F8983', fontSize: 12, marginTop: 4 },
+  optionList: { gap: 8, marginTop: 18 },
+  addOption: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.035)',
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 17,
+    borderWidth: 1,
+    columnGap: 12,
+    flexDirection: 'row',
+    minHeight: 66,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  optionIcon: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(163,230,53,0.08)',
+    borderColor: 'rgba(163,230,53,0.17)',
+    borderRadius: 13,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
+  },
+  optionText: { flex: 1, gap: 3, minWidth: 0 },
+  optionTitle: { color: '#F5F7F2', fontSize: 13.5, fontWeight: '800' },
+  optionDetail: { color: '#849087', fontSize: 10.5, lineHeight: 15 },
   pressed: { opacity: 0.75 },
 });

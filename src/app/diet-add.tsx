@@ -2,7 +2,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { Chip, DietField, DietHeader, dietUi } from '@/components/diet/diet-ui';
@@ -24,7 +24,7 @@ function errorText(reason: unknown, fallback: string) {
   return reason instanceof Error ? reason.message : fallback;
 }
 
-type AddMode = 'search' | 'amount' | 'custom' | 'barcode' | 'vision' | 'vision-results';
+type AddMode = 'search' | 'amount' | 'custom' | 'barcode' | 'vision' | 'vision-detailed' | 'vision-results';
 type VisionDraft = { item: { name: string; estimated_grams: number; calories: number; protein: number; carbs: number; fat: number }; grams: string };
 
 async function fetchScannedFood(barcode: string): Promise<FoodItem | null> {
@@ -54,6 +54,12 @@ async function fetchScannedFood(barcode: string): Promise<FoodItem | null> {
   }
   const product = result.product as OffProduct;
   return mapOffProduct({ ...product, code: product.code ?? barcode });
+}
+
+function getScannedBarcode(value: string) {
+  const text = value.trim();
+  if (isBarcode(text)) return text;
+  return text.match(/(?:^|\/)(\d{8,14})(?:\.json)?(?:\/|[?#]|$)/)?.[1] ?? null;
 }
 
 function SearchIcon() {
@@ -92,7 +98,13 @@ export default function DietAddScreen() {
   const dateKey = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? '') ? params.date! : toLocalDateKey(new Date());
   const [meal, setMeal] = useState<MealKey>(MEAL_KEYS.has(params.meal as MealKey) ? (params.meal as MealKey) : 'breakfast');
 
-  const [mode, setMode] = useState<AddMode>(() => params.mode === 'barcode' ? 'barcode' : params.mode === 'vision' ? 'vision' : 'search');
+  const [mode, setMode] = useState<AddMode>(() => {
+    if (params.mode === 'barcode') return 'barcode';
+    if (params.mode === 'vision') return 'vision';
+    if (params.mode === 'vision-detailed') return 'vision-detailed';
+    return 'search';
+  });
+  const isDetailedVision = params.mode === 'vision-detailed';
   const [query, setQuery] = useState('');
   const [saved, setSaved] = useState<FoodItem[]>([]);
   const [online, setOnline] = useState<FoodItem[]>([]);
@@ -113,6 +125,8 @@ export default function DietAddScreen() {
   const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
   const [visionError, setVisionError] = useState<string | null>(null);
   const [visionDrafts, setVisionDrafts] = useState<VisionDraft[]>([]);
+  const [visionPhoto, setVisionPhoto] = useState<{ uri: string; base64: string } | null>(null);
+  const [visionDescription, setVisionDescription] = useState('');
   const abort = useRef<AbortController | null>(null);
   const barcodeLock = useRef(false);
 
@@ -204,9 +218,9 @@ export default function DietAddScreen() {
   };
 
   const handleBarcode = async (value: string) => {
-    const barcode = value.trim();
-    if (barcodeLock.current || !isBarcode(barcode)) {
-      if (!isBarcode(barcode)) setScanError('Kod kreskowy musi zawierać od 8 do 14 cyfr.');
+    const barcode = getScannedBarcode(value);
+    if (barcodeLock.current || !barcode) {
+      if (!barcode) setScanError('Zeskanowany kod nie zawiera kodu produktu Open Food Facts.');
       return;
     }
 
@@ -241,9 +255,34 @@ export default function DietAddScreen() {
       if (result.canceled || !result.assets[0]) return;
 
       setAnalyzingPhoto(true);
-      const image = await compressMealPhoto(result.assets[0].uri);
-      const items = await analyzeMealPhoto(image, session?.access_token ?? null);
+      const { uri } = result.assets[0];
+      const base64 = await compressMealPhoto(uri);
+      setVisionPhoto({ uri, base64 });
+      if (!isDetailedVision) {
+        const items = await analyzeMealPhoto(base64, session?.access_token ?? null);
+        setVisionDrafts(items.map((item) => ({ item, grams: String(item.estimated_grams) })));
+        setSaveError(null);
+        setMode('vision-results');
+      }
+    } catch (reason) {
+      setVisionError(errorText(reason, 'Nie udało się przygotować zdjęcia do analizy.'));
+    } finally {
+      setAnalyzingPhoto(false);
+    }
+  };
+
+  const recalculateVision = async () => {
+    if (!visionPhoto || analyzingPhoto) return;
+    setAnalyzingPhoto(true);
+    setVisionError(null);
+    try {
+      const items = await analyzeMealPhoto(
+        visionPhoto.base64,
+        session?.access_token ?? null,
+        isDetailedVision ? visionDescription : undefined,
+      );
       setVisionDrafts(items.map((item) => ({ item, grams: String(item.estimated_grams) })));
+      setSaveError(null);
       setMode('vision-results');
     } catch (reason) {
       setVisionError(errorText(reason, 'Nie udało się przygotować zdjęcia do analizy.'));
@@ -409,7 +448,7 @@ export default function DietAddScreen() {
                 <CameraView
                   style={styles.camera}
                   facing="back"
-                  barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
+                  barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'qr'] }}
                   onBarcodeScanned={scanBusy ? undefined : (result) => { void handleBarcode(result.data); }}
                   onMountError={(event) => setScanError(event.message)}
                 />
@@ -425,7 +464,7 @@ export default function DietAddScreen() {
                 <ActivityIndicator color="#A3E635" />
               </View>
             )}
-            <Text style={dietUi.muted}>Ustaw kod produktu w ramce. Możesz też wpisać go ręcznie.</Text>
+            <Text style={dietUi.muted}>Ustaw kod QR lub kreskowy produktu w ramce. Możesz też wpisać kod ręcznie.</Text>
             <View style={styles.search}>
               <TextInput
                 value={manualBarcode}
@@ -469,7 +508,7 @@ export default function DietAddScreen() {
             <DietHeader eyebrow={`DODAJ DO: ${mealLabel.toUpperCase()}`} title="Zdjęcie posiłku" />
             <ObsidianCard contentStyle={styles.amountCard}>
               <Text style={dietUi.muted}>
-                Zdjęcie zostanie skompresowane i wysłane jednorazowo do analizy AI. Nie zapisujemy go w bazie ani w Storage.
+                AI oszacuje składniki i wartości odżywcze. Zdjęcie jest analizowane jednorazowo i nie trafia do bazy ani Storage.
               </Text>
               <WorkoutButton
                 label={analyzingPhoto ? 'Analizuję zdjęcie…' : 'Zrób zdjęcie'}
@@ -487,9 +526,90 @@ export default function DietAddScreen() {
           </>
         ) : null}
 
+        {mode === 'vision-detailed' ? (
+          <>
+            <DietHeader eyebrow={`DODAJ DO: ${mealLabel.toUpperCase()}`} title="Dokładny pomiar AI" />
+            <ObsidianCard contentStyle={styles.amountCard}>
+              <Text style={dietUi.muted}>
+                Dodaj zdjęcie i opisz danie lub markę. AI uwzględni opis; wartości nadal są szacunkiem, który możesz poprawić przed zapisem.
+              </Text>
+              {visionPhoto ? (
+                <Image
+                  accessibilityLabel="Zdjęcie wybranego posiłku"
+                  source={{ uri: visionPhoto.uri }}
+                  style={styles.visionPhoto}
+                />
+              ) : null}
+              <WorkoutButton
+                label={analyzingPhoto ? 'Przygotowuję zdjęcie…' : visionPhoto ? 'Zrób inne zdjęcie' : 'Zrób zdjęcie'}
+                onPress={() => { void chooseMealPhoto('camera'); }}
+                disabled={analyzingPhoto}
+              />
+              <WorkoutButton
+                label="Wybierz z galerii"
+                onPress={() => { void chooseMealPhoto('library'); }}
+                disabled={analyzingPhoto}
+              />
+              <TextInput
+                accessibilityLabel="Opis dania dla agenta AI"
+                value={visionDescription}
+                onChangeText={setVisionDescription}
+                placeholder="np. Burger Drwala z McDonald's"
+                placeholderTextColor="#68736B"
+                selectionColor="#A3E635"
+                maxLength={300}
+                multiline
+                textAlignVertical="top"
+                style={styles.visionDescription}
+              />
+              <WorkoutButton
+                label={analyzingPhoto ? 'Przeliczam…' : 'Przelicz ponownie'}
+                onPress={() => { void recalculateVision(); }}
+                disabled={!visionPhoto || analyzingPhoto}
+              />
+              {visionError ? <Text style={dietUi.error}>{visionError}</Text> : null}
+            </ObsidianCard>
+          </>
+        ) : null}
+
         {mode === 'vision-results' ? (
           <>
-            <DietHeader eyebrow={`DODAJ DO: ${mealLabel.toUpperCase()}`} title="Wykryte składniki" />
+            <DietHeader
+              eyebrow={`DODAJ DO: ${mealLabel.toUpperCase()}`}
+              title={isDetailedVision ? 'Pomiar z agentem AI' : 'Wykryte składniki'}
+            />
+            {isDetailedVision ? (
+              <ObsidianCard contentStyle={styles.amountCard}>
+                <Text style={dietUi.muted}>
+                  Możesz poprawić opis i przeliczyć składniki ponownie. AI podaje szacunki; sprawdź je przed dodaniem.
+                </Text>
+                {visionPhoto ? (
+                  <Image
+                    accessibilityLabel="Zdjęcie analizowanego posiłku"
+                    source={{ uri: visionPhoto.uri }}
+                    style={styles.visionPhoto}
+                  />
+                ) : null}
+                <TextInput
+                  accessibilityLabel="Doprecyzuj danie dla agenta AI"
+                  value={visionDescription}
+                  onChangeText={setVisionDescription}
+                  placeholder="np. Burger Drwala z McDonald's"
+                  placeholderTextColor="#68736B"
+                  selectionColor="#A3E635"
+                  maxLength={300}
+                  multiline
+                  textAlignVertical="top"
+                  style={styles.visionDescription}
+                />
+                <WorkoutButton
+                  label={analyzingPhoto ? 'Przeliczam…' : 'Przelicz ponownie'}
+                  onPress={() => { void recalculateVision(); }}
+                  disabled={!visionPhoto || analyzingPhoto}
+                />
+                {visionError ? <Text style={dietUi.error}>{visionError}</Text> : null}
+              </ObsidianCard>
+            ) : null}
             {visionDrafts.length ? (
               <>
                 <Text style={dietUi.muted}>Sprawdź gramaturę każdego składnika przed zapisaniem.</Text>
@@ -524,7 +644,7 @@ export default function DietAddScreen() {
             ) : (
               <ObsidianCard contentStyle={styles.amountCard}>
                 <Text style={dietUi.muted}>Nie udało się rozpoznać składników na zdjęciu.</Text>
-                <WorkoutButton label="Wybierz inne zdjęcie" onPress={() => setMode('vision')} />
+                <WorkoutButton label="Wybierz inne zdjęcie" onPress={() => setMode(isDetailedVision ? 'vision-detailed' : 'vision')} />
               </ObsidianCard>
             )}
           </>
@@ -678,5 +798,18 @@ const styles = StyleSheet.create({
   previewMacroValue: { color: '#F5F7F2', fontSize: 15, fontWeight: '800' },
   textButton: { alignItems: 'center', paddingVertical: 8 },
   textButtonLabel: { color: '#8A948C', fontSize: 13, fontWeight: '700' },
+  visionPhoto: { alignSelf: 'center', borderRadius: 16, height: 190, width: '100%' },
+  visionDescription: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(163,230,53,0.25)',
+    borderRadius: 16,
+    borderWidth: 1,
+    color: '#F5F7F2',
+    fontSize: 14,
+    lineHeight: 20,
+    minHeight: 80,
+    padding: 12,
+    width: '100%',
+  },
   pressed: { opacity: 0.75 },
 });

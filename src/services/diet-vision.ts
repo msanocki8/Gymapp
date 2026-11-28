@@ -10,7 +10,11 @@ export async function compressMealPhoto(uri: string): Promise<string> {
   return result.base64;
 }
 
-export async function analyzeMealPhoto(base64: string, accessToken: string | null): Promise<DietVisionItem[]> {
+export async function analyzeMealPhoto(
+  base64: string,
+  accessToken: string | null,
+  description?: string,
+): Promise<DietVisionItem[]> {
   if (!accessToken) throw new Error('Zaloguj się ponownie, aby analizować posiłki.');
 
   const apiUrl = process.env.EXPO_PUBLIC_DIET_VISION_API_URL?.trim()
@@ -24,7 +28,11 @@ export async function analyzeMealPhoto(base64: string, accessToken: string | nul
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ image: base64, mimeType: 'image/jpeg' }),
+      body: JSON.stringify({
+        image: base64,
+        mimeType: 'image/jpeg',
+        ...(description?.trim() ? { description: description.trim().slice(0, 500) } : {}),
+      }),
     });
   } catch {
     throw new Error('Nie można połączyć się z analizą zdjęcia. Sprawdź połączenie internetowe.');
