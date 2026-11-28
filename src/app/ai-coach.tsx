@@ -376,6 +376,7 @@ export default function AiCoachScreen() {
         onNavigate={(tab) => {
           if (tab === 'training') router.replace('/(tabs)/training');
           if (tab === 'history') router.replace('/(tabs)/history');
+          if (tab === 'diet') router.replace('/(tabs)/diet');
           if (tab === 'account') router.replace('/(tabs)/account');
         }}
         onStart={() => router.push('/workout-flow')}

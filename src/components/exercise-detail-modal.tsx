@@ -1,5 +1,6 @@
-import { useContext, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { BlurView } from 'expo-blur';
+import { Image } from 'expo-image';
 import {
   Pressable,
   Platform,
@@ -14,6 +15,7 @@ import { workoutColors } from '@/components/workout-ui';
 import { BodyView, getBodyView, MuscleEngagementMap } from '@/components/muscle-engagement-map';
 import { GlassBlurTargetContext } from '@/components/glass-blur-context';
 import { WorkoutSession } from '@/hooks/use-gym-app';
+import { getRepDBIllustration } from '@/constants/repdb-exercises';
 
 type DetailTab = 'O ćwiczeniu' | 'Poziom' | 'Statystyki' | 'Historia';
 
@@ -32,6 +34,17 @@ export function ExerciseDetailModal({
   const [tab, setTab] = useState<DetailTab>('O ćwiczeniu');
   const [showLoggingHelp, setShowLoggingHelp] = useState(false);
   const [muscleViewState, setMuscleViewState] = useState<{ exerciseId: string; view: BodyView } | null>(null);
+  const illustration = getRepDBIllustration(exercise?.id ?? '');
+  const [illustrationPhase, setIllustrationPhase] = useState<'start' | 'peak'>('start');
+  const [illustrationFailed, setIllustrationFailed] = useState(false);
+
+  useEffect(() => {
+    if (!illustration?.start || !illustration.peak) return;
+    const interval = setInterval(() => {
+      setIllustrationPhase((current) => current === 'start' ? 'peak' : 'start');
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [exercise?.id, illustration?.start, illustration?.peak]);
 
   if (!exercise) return null;
 
@@ -53,8 +66,8 @@ export function ExerciseDetailModal({
               <Text style={styles.eyebrow}>{exercise.category.toLocaleUpperCase('pl-PL')} · {exercise.level.toLocaleUpperCase('pl-PL')}</Text>
               <Text className="min-w-0 shrink" style={styles.title} numberOfLines={2} ellipsizeMode="tail">{exercise.name}</Text>
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="Zamknij" onPress={onClose} className="items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 active:opacity-70" style={styles.closeButton}>
-              <Text style={styles.closeText}>×</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Wróć do listy ćwiczeń" onPress={onClose} className="items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 active:opacity-70" style={styles.closeButton}>
+              <Text style={styles.closeText}>‹</Text>
             </Pressable>
           </View>
 
@@ -75,9 +88,25 @@ export function ExerciseDetailModal({
             {tab === 'O ćwiczeniu' ? (
               <>
                 <View className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900" style={styles.demoCard}>
-                  <View className="flex-1 items-center justify-center px-4">
-                    <Text style={styles.demoImageNotice}>Wersja Demo — zdjęcia nie dodane</Text>
-                  </View>
+                  {illustration && !illustrationFailed ? (
+                    <Image
+                      accessibilityLabel={`Ilustracja techniki ćwiczenia: ${exercise.name}`}
+                      source={{
+                        uri: Platform.OS === 'web'
+                          ? `/exercises/${illustration.main ?? (illustrationPhase === 'start' ? illustration.start : illustration.peak)}`
+                          : `https://raw.githubusercontent.com/RepDB/exercise-dataset/main/images/flat/${illustration.main ?? (illustrationPhase === 'start' ? illustration.start : illustration.peak)}`,
+                      }}
+                      contentFit="contain"
+                      transition={220}
+                      cachePolicy="disk"
+                      onError={() => setIllustrationFailed(true)}
+                      style={StyleSheet.absoluteFill}
+                    />
+                  ) : (
+                    <View className="flex-1 items-center justify-center px-4">
+                      <Text style={styles.demoImageNotice}>Ilustracja niedostępna</Text>
+                    </View>
+                  )}
                   <View className="absolute bottom-3 left-3 rounded-full border border-zinc-600/70 bg-zinc-950/80 px-3 py-2">
                     <Text style={styles.demoBadge}>PODGLĄD TECHNIKI</Text>
                   </View>

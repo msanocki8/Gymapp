@@ -187,31 +187,32 @@ function CreateWorkoutForm({ existingPlan }: { existingPlan?: WorkoutPlan }) {
     }
   }
 
-  if (selectedDetail) {
-    return (
-      <WorkoutScreen>
-        <ExerciseDetailModal exercise={selectedDetail} sessions={sessions} onClose={() => setSelectedDetail(null)} />
-      </WorkoutScreen>
-    );
-  }
-
   if (isPickerVisible) {
     return (
       <WorkoutScreen>
-        <ExercisePickerModal
-          selectedExerciseIds={exerciseConfigs
-            .map((item) => item.exerciseId ?? exerciseLibrary.find((exercise) => exercise.name === item.name)?.id)
-            .filter((id): id is string => Boolean(id))}
-          recentExerciseIds={recentExerciseIds}
-          customExercises={customExercises}
-          onClose={() => setPickerVisible(false)}
-          onSelect={addExercise}
-          onAddCustomExercise={(exercise) => setCustomExercises((current) => [exercise, ...current])}
-          onShowDetails={(exercise) => {
-            setPickerVisible(false);
-            setSelectedDetail(exercise);
-          }}
-        />
+        <View style={StyleSheet.absoluteFill}>
+          <ExercisePickerModal
+            selectedExerciseIds={exerciseConfigs
+              .map((item) => item.exerciseId ?? exerciseLibrary.find((exercise) => exercise.name === item.name)?.id)
+              .filter((id): id is string => Boolean(id))}
+            recentExerciseIds={recentExerciseIds}
+            customExercises={customExercises}
+            onClose={() => setPickerVisible(false)}
+            onSelect={addExercise}
+            onAddCustomExercise={(exercise) => setCustomExercises((current) => [exercise, ...current])}
+            onShowDetails={setSelectedDetail}
+          />
+          {selectedDetail && (
+            <View style={[StyleSheet.absoluteFill, styles.detailOverlay]}>
+              <ExerciseDetailModal
+                key={selectedDetail.id}
+                exercise={selectedDetail}
+                sessions={sessions}
+                onClose={() => setSelectedDetail(null)}
+              />
+            </View>
+          )}
+        </View>
       </WorkoutScreen>
     );
   }
@@ -442,6 +443,11 @@ function CreateWorkoutForm({ existingPlan }: { existingPlan?: WorkoutPlan }) {
 
 const styles = StyleSheet.create({
   keyboard: { flex: 1 },
+  detailOverlay: {
+    backgroundColor: 'rgba(0,0,0,0.82)',
+    elevation: 30,
+    padding: 8,
+  },
   content: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 172 },
   intro: { marginBottom: 23 },
   eyebrowRow: { gap: 8 },

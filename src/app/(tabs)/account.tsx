@@ -1,6 +1,6 @@
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 
 import { GlassPanel } from '@/components/glass-panel';
 import { GlassScreen } from '@/components/glass-screen';
@@ -315,7 +315,15 @@ export default function AccountScreen() {
             {signingOut ? <ActivityIndicator color="#FCA5A5" /> : null}
             <Text className="text-sm font-bold text-red-200">{signingOut ? 'Wylogowywanie…' : 'Wyloguj się'}</Text>
           </Pressable>
-          <Text className="mt-10 text-center text-[10px] font-bold tracking-[2px] text-white/25">GYM LOG · 1.0.1</Text>
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel="Otwórz stronę RepDB"
+            onPress={() => { void Linking.openURL('https://repdb.co'); }}>
+            <Text className="mt-10 text-center text-[10px] font-bold tracking-[1px] text-white/35">
+              Exercise data & illustrations by RepDB (repdb.co)
+            </Text>
+          </Pressable>
+          <Text className="mt-3 text-center text-[10px] font-bold tracking-[2px] text-white/25">GYM LOG · 1.0.1</Text>
         </View>
       </ScrollView>
     </GlassScreen>

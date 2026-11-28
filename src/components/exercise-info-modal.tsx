@@ -43,8 +43,8 @@ function ExerciseDetails({ exercise, onClose }: { exercise: Exercise; onClose: (
               <Text style={styles.eyebrow}>{exercise.category.toLocaleUpperCase('pl-PL')} · {exercise.level.toLocaleUpperCase('pl-PL')}</Text>
               <Text style={styles.title}>{exercise.name}</Text>
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="Zamknij" onPress={onClose} style={styles.closeButton}>
-              <SymbolView name={{ ios: 'xmark', android: 'close', web: 'close' }} size={15} tintColor={C.text} />
+            <Pressable accessibilityRole="button" accessibilityLabel="Wróć do listy ćwiczeń" onPress={onClose} style={styles.closeButton}>
+              <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={15} tintColor={C.text} />
             </Pressable>
           </View>
 

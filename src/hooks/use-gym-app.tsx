@@ -93,14 +93,6 @@ const starterPlans: WorkoutPlan[] = [
     ['cable-hammer-curl', 2, '10–15'],
     ['hanging-leg-raise', 3, '8–15'],
   ]),
-  createStarterPlan('dzis-cwiczen', 'dzis cwiczen', 'Plecy · biceps · brzuch', 60, [
-    ['lat-pulldown', 3, '8–12'],
-    ['seated-cable-row', 3, '10–12'],
-    ['reverse-pec-deck', 2, '12–20'],
-    ['preacher-curl', 3, '10–15'],
-    ['cable-hammer-curl', 2, '10–15'],
-    ['cable-crunch', 3, '10–15'],
-  ]),
   createStarterPlan('fbw', 'Dzień 3 — FBW', 'FBW', 75, [
     ['leg-press', 3, '8–12'],
     ['romanian-deadlift', 3, '6–10'],
@@ -568,8 +560,7 @@ export function GymAppProvider({ children }: PropsWithChildren) {
 
   const allPlans = useMemo(() => [
     ...starterPlans.filter((starter) => !customPlans.some((plan) =>
-      plan.sourcePlanId === starter.id ||
-      (starter.id === 'dzis-cwiczen' && plan.name.trim().toLowerCase() === starter.name.toLowerCase()))
+      plan.sourcePlanId === starter.id)
       && !hiddenStarterPlanIds.includes(starter.id)),
     ...customPlans,
   ], [customPlans, hiddenStarterPlanIds]);

@@ -118,11 +118,11 @@ export function AppBottomBar({
   const morph = startMorph;
 
   useEffect(() => {
-    if (!startActive) return;
-    morph.set(reducedMotion ? 1 : withTiming(1, { duration: MORPH_MS, easing: morphEasing }));
-    return () => {
-      morph.set(reducedMotion ? 0 : withTiming(0, { duration: MORPH_MS, easing: morphEasing }));
-    };
+    morph.set(
+      reducedMotion
+        ? (startActive ? 1 : 0)
+        : withTiming(startActive ? 1 : 0, { duration: MORPH_MS, easing: morphEasing }),
+    );
   }, [startActive, reducedMotion, morph]);
 
   const playStyle = useAnimatedStyle(() => ({

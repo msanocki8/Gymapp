@@ -1038,20 +1038,29 @@ export default function WorkoutSessionScreen() {
   if (isExercisePickerVisible) {
     return (
       <WorkoutScreen>
-        <ExercisePickerModal
-          selectedExerciseIds={exerciseConfigs
-            .map((config) => config.exerciseId ?? exerciseLibrary.find((exercise) => exercise.name === config.name)?.id)
-            .filter((id): id is string => Boolean(id))}
-          recentExerciseIds={recentExerciseIds}
-          customExercises={customExercises}
-          onClose={() => setIsExercisePickerVisible(false)}
-          onSelect={addExercise}
-          onAddCustomExercise={(exercise) => setCustomExercises((current) => [exercise, ...current])}
-          onShowDetails={(exercise) => {
-            setSelectedDetail(exercise);
-            setIsExercisePickerVisible(false);
-          }}
-        />
+        <View style={StyleSheet.absoluteFill}>
+          <ExercisePickerModal
+            selectedExerciseIds={exerciseConfigs
+              .map((config) => config.exerciseId ?? exerciseLibrary.find((exercise) => exercise.name === config.name)?.id)
+              .filter((id): id is string => Boolean(id))}
+            recentExerciseIds={recentExerciseIds}
+            customExercises={customExercises}
+            onClose={() => setIsExercisePickerVisible(false)}
+            onSelect={addExercise}
+            onAddCustomExercise={(exercise) => setCustomExercises((current) => [exercise, ...current])}
+            onShowDetails={setSelectedDetail}
+          />
+          {selectedDetail && (
+            <View className="absolute inset-0 bg-black/80" style={styles.detailOverlay}>
+              <ExerciseDetailModal
+                key={selectedDetail.id}
+                exercise={selectedDetail}
+                sessions={sessions}
+                onClose={() => setSelectedDetail(null)}
+              />
+            </View>
+          )}
+        </View>
       </WorkoutScreen>
     );
   }
