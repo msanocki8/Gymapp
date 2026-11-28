@@ -59,6 +59,8 @@ export default function DietScreen() {
   }, [reload]));
 
   const openAdd = (meal: MealKey) => router.push({ pathname: '/diet-add', params: { meal, date: dateKey } });
+  const openBarcode = (meal: MealKey) => router.push({ pathname: '/diet-add', params: { meal, date: dateKey, mode: 'barcode' } });
+  const openPhoto = (meal: MealKey) => router.push({ pathname: '/diet-add', params: { meal, date: dateKey, mode: 'vision' } });
 
   return (
     <SafeAreaView edges={['top']} style={styles.screen}>
@@ -128,6 +130,8 @@ export default function DietScreen() {
               total={day.byMeal[meal.key] ?? ZERO}
               entries={day.entries.filter((entry) => entry.meal === meal.key)}
               onAdd={() => openAdd(meal.key)}
+              onScanBarcode={() => openBarcode(meal.key)}
+              onScanPhoto={() => openPhoto(meal.key)}
               onRemove={(entry) => confirmRemove(entry, () => void day.remove(entry.id))}
             />
           ))}

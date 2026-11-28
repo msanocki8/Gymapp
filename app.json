@@ -29,6 +29,21 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "GymApp używa aparatu do skanowania kodów produktów.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "GymApp używa aparatu do analizy posiłków.",
+          "photosPermission": "GymApp używa wybranego zdjęcia wyłącznie do analizy posiłku.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#070908",

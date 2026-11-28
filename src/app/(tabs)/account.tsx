@@ -323,6 +323,9 @@ export default function AccountScreen() {
               Exercise data & illustrations by RepDB (repdb.co)
             </Text>
           </Pressable>
+          <Text className="mt-2 text-center text-[10px] font-medium text-white/35">
+            Dane produktów: Open Food Facts (ODbL)
+          </Text>
           <Text className="mt-3 text-center text-[10px] font-bold tracking-[2px] text-white/25">GYM LOG · 1.0.1</Text>
         </View>
       </ScrollView>

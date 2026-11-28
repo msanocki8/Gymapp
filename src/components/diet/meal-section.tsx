@@ -27,6 +27,8 @@ export function MealSection({
   total,
   entries,
   onAdd,
+  onScanBarcode,
+  onScanPhoto,
   onRemove,
 }: {
   meal: MealKey;
@@ -34,6 +36,8 @@ export function MealSection({
   total: Macros;
   entries: DietEntry[];
   onAdd: () => void;
+  onScanBarcode: () => void;
+  onScanPhoto: () => void;
   onRemove: (entry: DietEntry) => void;
 }) {
   return (
@@ -48,18 +52,41 @@ export function MealSection({
             {formatKcal(total.kcal)} kcal{entries.length ? ` · B ${Math.round(total.protein)} · W ${Math.round(total.carbs)} · T ${Math.round(total.fat)}` : ''}
           </Text>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Dodaj produkt do: ${label}`}
-          hitSlop={6}
-          onPress={onAdd}
-          style={({ pressed }) => [addGlow, styles.addWrap, pressed && styles.pressed]}>
-          <LinearGradient colors={['#22C55E', '#A3E635']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.add}>
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-              <Path d="M12 5v14M5 12h14" stroke="#06210D" strokeWidth={3} strokeLinecap="round" />
+        <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Skanuj kod produktu do: ${label}`}
+            hitSlop={6}
+            onPress={onScanBarcode}
+            style={({ pressed }) => [styles.scanButton, pressed && styles.pressed]}>
+            <Svg width={17} height={17} viewBox="0 0 24 24" fill="none">
+              <Path d="M4 5v14M7 5v14M10 5v14M14 5v14M17 5v14M20 5v14" stroke="#D8E2DA" strokeWidth={1.5} />
             </Svg>
-          </LinearGradient>
-        </Pressable>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Zrób zdjęcie posiłku do: ${label}`}
+            hitSlop={6}
+            onPress={onScanPhoto}
+            style={({ pressed }) => [styles.scanButton, pressed && styles.pressed]}>
+            <Svg width={17} height={17} viewBox="0 0 24 24" fill="none">
+              <Path d="M4 8.5h3l1.5-2h7l1.5 2h3v10H4v-10Z" stroke="#D8E2DA" strokeWidth={1.6} strokeLinejoin="round" />
+              <Path d="M12 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="#D8E2DA" strokeWidth={1.6} />
+            </Svg>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Dodaj produkt do: ${label}`}
+            hitSlop={6}
+            onPress={onAdd}
+            style={({ pressed }) => [addGlow, styles.addWrap, pressed && styles.pressed]}>
+            <LinearGradient colors={['#22C55E', '#A3E635']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.add}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path d="M12 5v14M5 12h14" stroke="#06210D" strokeWidth={3} strokeLinecap="round" />
+              </Svg>
+            </LinearGradient>
+          </Pressable>
+        </View>
       </View>
 
       {entries.length === 0 ? (
@@ -105,6 +132,17 @@ const styles = StyleSheet.create({
   titles: { flex: 1, minWidth: 0 },
   title: { color: '#F5F7F2', fontSize: 15, fontWeight: '900' },
   subtitle: { color: '#7F8983', fontSize: 12 },
+  actions: { alignItems: 'center', columnGap: 6, flexDirection: 'row' },
+  scanButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 18,
+    borderWidth: 1,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
   addWrap: { borderRadius: 18 },
   add: { alignItems: 'center', borderRadius: 18, height: 36, justifyContent: 'center', width: 36 },
   empty: {

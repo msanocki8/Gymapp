@@ -1,6 +1,6 @@
 const OFF_BASE = 'https://world.openfoodfacts.org';
 const OFF_FIELDS = 'code,product_name,product_name_pl,generic_name_pl,brands,nutriments,image_front_small_url';
-const OFF_USER_AGENT = 'GymApp/1.0 (https://github.com/msanocki8/Gymapp)';
+const OFF_USER_AGENT = 'GymLogApp/1.0';
 const CACHE_CONTROL = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
 const REQUEST_TIMEOUT_MS = 9000;
 

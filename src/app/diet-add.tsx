@@ -1,6 +1,8 @@
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { Chip, DietField, DietHeader, dietUi } from '@/components/diet/diet-ui';
@@ -9,9 +11,10 @@ import { ObsidianCard } from '@/components/obsidian-card';
 import { WorkoutButton, WorkoutScreen } from '@/components/workout-ui';
 import { useAuth } from '@/hooks/use-auth';
 import { addFoodToDay } from '@/hooks/use-diet';
-import { MEALS, parseGrams, round1, scaleNutrients, toLocalDateKey, type MealKey } from '@/lib/nutrition';
-import { createCustomFood, findByBarcode, loadRecentEntries, searchSavedFoods } from '@/services/diet-repository';
-import { fetchOffProduct, isBarcode, searchOffProducts, type FoodItem } from '@/services/open-food-facts';
+import { MEALS, parseGrams, round1, scaleNutrients, toLocalDateKey, type Macros, type MealKey } from '@/lib/nutrition';
+import { addMealEntries, createCustomFood, findByBarcode, loadRecentEntries, searchSavedFoods } from '@/services/diet-repository';
+import { analyzeMealPhoto, compressMealPhoto } from '@/services/diet-vision';
+import { fetchOffProduct, isBarcode, mapOffProduct, searchOffProducts, type FoodItem, type OffProduct } from '@/services/open-food-facts';
 
 const QUICK_GRAMS = [50, 100, 150, 200, 250];
 const MEAL_KEYS = new Set<MealKey>(MEALS.map((meal) => meal.key));
@@ -19,6 +22,38 @@ const MEAL_KEYS = new Set<MealKey>(MEALS.map((meal) => meal.key));
 function errorText(reason: unknown, fallback: string) {
   if (reason instanceof Error && reason.name === 'AbortError') return null;
   return reason instanceof Error ? reason.message : fallback;
+}
+
+type AddMode = 'search' | 'amount' | 'custom' | 'barcode' | 'vision' | 'vision-results';
+type VisionDraft = { item: { name: string; estimated_grams: number; calories: number; protein: number; carbs: number; fat: number }; grams: string };
+
+async function fetchScannedFood(barcode: string): Promise<FoodItem | null> {
+  const apiUrl = process.env.EXPO_PUBLIC_OPEN_FOOD_FACTS_API_URL?.trim()
+    || (Platform.OS === 'web' ? '/api/open-food-facts' : 'https://gymapp-one-lemon.vercel.app/api/open-food-facts');
+  const response = await fetch(`${apiUrl}?barcode=${encodeURIComponent(barcode)}`, {
+    headers: { Accept: 'application/json' },
+  });
+  const result = await response.json().catch(() => null) as unknown;
+  if (!response.ok) {
+    const message = typeof result === 'object' && result !== null && 'error' in result && typeof result.error === 'string'
+      ? result.error
+      : 'Nie udało się pobrać produktu z Open Food Facts.';
+    throw new Error(message);
+  }
+  if (
+    typeof result !== 'object'
+    || result === null
+    || !('status' in result)
+    || result.status !== 1
+    || !('product' in result)
+    || typeof result.product !== 'object'
+    || result.product === null
+    || Array.isArray(result.product)
+  ) {
+    return null;
+  }
+  const product = result.product as OffProduct;
+  return mapOffProduct({ ...product, code: product.code ?? barcode });
 }
 
 function SearchIcon() {
@@ -50,13 +85,14 @@ function FoodRow({ food, onPress }: { food: FoodItem; onPress: () => void }) {
 
 export default function DietAddScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const userId = user?.id ?? null;
-  const params = useLocalSearchParams<{ meal?: string; date?: string }>();
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const params = useLocalSearchParams<{ meal?: string; date?: string; mode?: string }>();
   const dateKey = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? '') ? params.date! : toLocalDateKey(new Date());
   const [meal, setMeal] = useState<MealKey>(MEAL_KEYS.has(params.meal as MealKey) ? (params.meal as MealKey) : 'breakfast');
 
-  const [mode, setMode] = useState<'search' | 'amount' | 'custom'>('search');
+  const [mode, setMode] = useState<AddMode>(() => params.mode === 'barcode' ? 'barcode' : params.mode === 'vision' ? 'vision' : 'search');
   const [query, setQuery] = useState('');
   const [saved, setSaved] = useState<FoodItem[]>([]);
   const [online, setOnline] = useState<FoodItem[]>([]);
@@ -71,7 +107,14 @@ export default function DietAddScreen() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const [custom, setCustom] = useState({ name: '', brand: '', kcal: '', protein: '', carbs: '', fat: '', barcode: '' });
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [manualBarcode, setManualBarcode] = useState('');
+  const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
+  const [visionError, setVisionError] = useState<string | null>(null);
+  const [visionDrafts, setVisionDrafts] = useState<VisionDraft[]>([]);
   const abort = useRef<AbortController | null>(null);
+  const barcodeLock = useRef(false);
 
   // Ostatnio jedzone – wartości na 100 g odtwarzamy z zapisanego wpisu.
   useEffect(() => {
@@ -158,6 +201,80 @@ export default function DietAddScreen() {
     setGramsText('100');
     setSaveError(null);
     setMode('amount');
+  };
+
+  const handleBarcode = async (value: string) => {
+    const barcode = value.trim();
+    if (barcodeLock.current || !isBarcode(barcode)) {
+      if (!isBarcode(barcode)) setScanError('Kod kreskowy musi zawierać od 8 do 14 cyfr.');
+      return;
+    }
+
+    barcodeLock.current = true;
+    setScanBusy(true);
+    setScanError(null);
+    try {
+      const found = await fetchScannedFood(barcode);
+      if (!found) throw new Error('Nie znaleziono produktu z tym kodem w Open Food Facts.');
+      pick(found);
+    } catch (reason) {
+      setScanError(errorText(reason, 'Nie udało się odczytać produktu.'));
+    } finally {
+      setScanBusy(false);
+    }
+  };
+
+  const chooseMealPhoto = async (source: 'camera' | 'library') => {
+    setVisionError(null);
+    try {
+      if (source === 'camera' && Platform.OS !== 'web') {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          setVisionError('Zezwól na dostęp do aparatu, aby zrobić zdjęcie posiłku.');
+          return;
+        }
+      }
+
+      const result = source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+      if (result.canceled || !result.assets[0]) return;
+
+      setAnalyzingPhoto(true);
+      const image = await compressMealPhoto(result.assets[0].uri);
+      const items = await analyzeMealPhoto(image, session?.access_token ?? null);
+      setVisionDrafts(items.map((item) => ({ item, grams: String(item.estimated_grams) })));
+      setMode('vision-results');
+    } catch (reason) {
+      setVisionError(errorText(reason, 'Nie udało się przygotować zdjęcia do analizy.'));
+    } finally {
+      setAnalyzingPhoto(false);
+    }
+  };
+
+  const validVisionDrafts = visionDrafts.every((draft) => parseGrams(draft.grams) !== null);
+  const saveVisionEntries = async () => {
+    if (!userId || !visionDrafts.length || !validVisionDrafts || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const entries = visionDrafts.map(({ item, grams: gramsTextValue }) => {
+        const grams = parseGrams(gramsTextValue)!;
+        const per100 = {
+          kcal: item.calories * 100 / item.estimated_grams,
+          protein: item.protein * 100 / item.estimated_grams,
+          carbs: item.carbs * 100 / item.estimated_grams,
+          fat: item.fat * 100 / item.estimated_grams,
+        };
+        const macros: Macros = scaleNutrients(per100, grams);
+        return { name: item.name, grams, macros };
+      });
+      await addMealEntries(userId, { dateKey, meal, entries });
+      router.back();
+    } catch (reason) {
+      setSaveError(errorText(reason, 'Nie udało się dodać składników do posiłku.'));
+      setSaving(false);
+    }
   };
 
   const add = async () => {
@@ -280,6 +397,136 @@ export default function DietAddScreen() {
               <Text style={styles.customButtonText}>+ Dodaj własny produkt</Text>
               <Text style={dietUi.muted}>np. domowy obiad – podajesz wartości na 100 g</Text>
             </Pressable>
+            <Text style={dietUi.muted}>Dane produktów: Open Food Facts (ODbL)</Text>
+          </>
+        ) : null}
+
+        {mode === 'barcode' ? (
+          <>
+            <DietHeader eyebrow={`DODAJ DO: ${mealLabel.toUpperCase()}`} title="Skanuj kod produktu" />
+            {cameraPermission?.granted ? (
+              <View style={styles.cameraFrame}>
+                <CameraView
+                  style={styles.camera}
+                  facing="back"
+                  barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
+                  onBarcodeScanned={scanBusy ? undefined : (result) => { void handleBarcode(result.data); }}
+                  onMountError={(event) => setScanError(event.message)}
+                />
+                <View pointerEvents="none" style={styles.scanGuide} />
+              </View>
+            ) : cameraPermission ? (
+              <ObsidianCard contentStyle={styles.amountCard}>
+                <Text style={dietUi.muted}>Zezwól na dostęp do aparatu, aby skanować kody kreskowe.</Text>
+                <WorkoutButton label="Włącz aparat" onPress={() => { void requestCameraPermission(); }} />
+              </ObsidianCard>
+            ) : (
+              <View style={styles.loading}>
+                <ActivityIndicator color="#A3E635" />
+              </View>
+            )}
+            <Text style={dietUi.muted}>Ustaw kod produktu w ramce. Możesz też wpisać go ręcznie.</Text>
+            <View style={styles.search}>
+              <TextInput
+                value={manualBarcode}
+                onChangeText={(text) => setManualBarcode(text.replace(/\D/g, '').slice(0, 14))}
+                placeholder="Kod kreskowy (8–14 cyfr)"
+                placeholderTextColor="#5F6962"
+                keyboardType="number-pad"
+                maxLength={14}
+                style={styles.searchInput}
+              />
+              <Pressable
+                accessibilityRole="button"
+                disabled={!isBarcode(manualBarcode) || scanBusy}
+                onPress={() => {
+                  barcodeLock.current = false;
+                  void handleBarcode(manualBarcode);
+                }}
+                style={({ pressed }) => [styles.searchAction, pressed && styles.pressed]}>
+                {scanBusy ? <ActivityIndicator color="#A3E635" size="small" /> : <Text style={styles.searchActionText}>Szukaj</Text>}
+              </Pressable>
+            </View>
+            {scanError ? (
+              <>
+                <Text style={dietUi.error}>{scanError}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    barcodeLock.current = false;
+                    setScanError(null);
+                  }}
+                  style={styles.textButton}>
+                  <Text style={styles.textButtonLabel}>Skanuj ponownie</Text>
+                </Pressable>
+              </>
+            ) : null}
+          </>
+        ) : null}
+
+        {mode === 'vision' ? (
+          <>
+            <DietHeader eyebrow={`DODAJ DO: ${mealLabel.toUpperCase()}`} title="Zdjęcie posiłku" />
+            <ObsidianCard contentStyle={styles.amountCard}>
+              <Text style={dietUi.muted}>
+                Zdjęcie zostanie skompresowane i wysłane jednorazowo do analizy AI. Nie zapisujemy go w bazie ani w Storage.
+              </Text>
+              <WorkoutButton
+                label={analyzingPhoto ? 'Analizuję zdjęcie…' : 'Zrób zdjęcie'}
+                onPress={() => { void chooseMealPhoto('camera'); }}
+                disabled={analyzingPhoto}
+              />
+              <WorkoutButton
+                label="Wybierz z galerii"
+                onPress={() => { void chooseMealPhoto('library'); }}
+                disabled={analyzingPhoto}
+              />
+              {analyzingPhoto ? <ActivityIndicator color="#A3E635" /> : null}
+            </ObsidianCard>
+            {visionError ? <Text style={dietUi.error}>{visionError}</Text> : null}
+          </>
+        ) : null}
+
+        {mode === 'vision-results' ? (
+          <>
+            <DietHeader eyebrow={`DODAJ DO: ${mealLabel.toUpperCase()}`} title="Wykryte składniki" />
+            {visionDrafts.length ? (
+              <>
+                <Text style={dietUi.muted}>Sprawdź gramaturę każdego składnika przed zapisaniem.</Text>
+                {visionDrafts.map(({ item, grams }, index) => {
+                  const amountValue = parseGrams(grams);
+                  const factor = amountValue ? amountValue / item.estimated_grams : 0;
+                  return (
+                    <ObsidianCard key={`${item.name}-${index}`} contentStyle={styles.amountCard}>
+                      <Text style={styles.foodName}>{item.name}</Text>
+                      <DietField
+                        label="GRAMATURA"
+                        suffix="g"
+                        value={grams}
+                        onChangeText={(value) => setVisionDrafts((current) => current.map((draft, draftIndex) => (
+                          draftIndex === index ? { ...draft, grams: value } : draft
+                        )))}
+                        keyboardType="decimal-pad"
+                      />
+                      <Text style={dietUi.muted}>
+                        {amountValue ? `${Math.round(item.calories * factor)} kcal · B ${round1(item.protein * factor)} · W ${round1(item.carbs * factor)} · T ${round1(item.fat * factor)}` : 'Podaj poprawną gramaturę.'}
+                      </Text>
+                    </ObsidianCard>
+                  );
+                })}
+                {saveError ? <Text style={dietUi.error}>{saveError}</Text> : null}
+                <WorkoutButton
+                  label={saving ? 'Dodaję składniki…' : `Dodaj do: ${mealLabel}`}
+                  onPress={() => { void saveVisionEntries(); }}
+                  disabled={!validVisionDrafts || saving || !userId}
+                />
+              </>
+            ) : (
+              <ObsidianCard contentStyle={styles.amountCard}>
+                <Text style={dietUi.muted}>Nie udało się rozpoznać składników na zdjęciu.</Text>
+                <WorkoutButton label="Wybierz inne zdjęcie" onPress={() => setMode('vision')} />
+              </ObsidianCard>
+            )}
           </>
         ) : null}
 
@@ -354,6 +601,27 @@ export default function DietAddScreen() {
 
 const styles = StyleSheet.create({
   page: { gap: 12, paddingBottom: 40, paddingHorizontal: 16, paddingTop: 12 },
+  loading: { alignItems: 'center', height: 220, justifyContent: 'center' },
+  cameraFrame: {
+    backgroundColor: '#0A0D0B',
+    borderColor: 'rgba(163,230,53,0.3)',
+    borderRadius: 22,
+    borderWidth: 1,
+    height: 300,
+    overflow: 'hidden',
+    position: 'relative',
+    width: '100%',
+  },
+  camera: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+  scanGuide: {
+    alignSelf: 'center',
+    borderColor: 'rgba(217,249,157,0.9)',
+    borderRadius: 16,
+    borderWidth: 2,
+    height: 112,
+    marginTop: 94,
+    width: '82%',
+  },
   search: {
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.05)',

@@ -156,6 +156,33 @@ export async function addEntry(
   return toEntry(data);
 }
 
+export async function addMealEntries(
+  userId: string,
+  input: { dateKey: string; meal: MealKey; entries: { name: string; grams: number; macros: Macros }[] },
+): Promise<DietEntry[]> {
+  if (!input.entries.length) throw new Error('Nie ma składników do zapisania.');
+
+  const { data, error } = await requireSupabase()
+    .from('diet_entries')
+    .insert(input.entries.map((entry) => ({
+      user_id: userId,
+      eaten_on: input.dateKey,
+      meal: input.meal,
+      food_name: entry.name,
+      brand: null,
+      source: 'custom' as const,
+      source_id: null,
+      grams: entry.grams,
+      kcal: entry.macros.kcal,
+      protein: entry.macros.protein,
+      carbs: entry.macros.carbs,
+      fat: entry.macros.fat,
+    })))
+    .select(ENTRY_FIELDS);
+  if (error) throw error;
+  return (data ?? []).map(toEntry);
+}
+
 export async function removeEntry(entryId: string) {
   const { error } = await requireSupabase().from('diet_entries').delete().eq('id', entryId);
   if (error) throw error;
