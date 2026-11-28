@@ -74,7 +74,7 @@ export async function POST(request: Request) {
   let response: Response;
   try {
     response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -135,7 +135,7 @@ export async function POST(request: Request) {
       return jsonResponse({ error: 'Gemini odrzucił żądanie analizy zdjęcia (HTTP 400).' }, 502);
     }
     if (response.status === 404) {
-      return jsonResponse({ error: 'Model Gemini 2.5 Flash nie jest dostępny dla tego klucza API.' }, 502);
+      return jsonResponse({ error: 'Model Gemini 3.5 Flash-Lite nie jest dostępny dla tego klucza API.' }, 502);
     }
     return jsonResponse({ error: `Gemini chwilowo nie odpowiada (HTTP ${response.status}). Spróbuj ponownie.` }, 502);
   }
